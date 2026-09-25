@@ -1,0 +1,6 @@
+fixtures/
+logs/
+media/
+static/
+templates/
+tests/

@@ -1,1 +1,23 @@
-.venv
+# Database
+db.sqlite3
+
+# Virtual Environment
+.venv/
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+logs/*
+!logs/.gitkeep
+
+# Media
+media/
+
+# IDE
+.vscode/
+.idea/
