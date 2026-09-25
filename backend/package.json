@@ -1,0 +1,19 @@
+{
+  "name": "tradeflow",
+  "version": "0.1.0",
+  "description": "TradeFlow - Enterprise Trade Operations & Customer Management Platform",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Sojh Consult",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@tabler/core": "^1.6.0",
+    "alpinejs": "^3.17.4",
+    "apexcharts": "^7.6.0",
+    "htmx.org": "^2.0.11"
+  }
+}
