@@ -1,0 +1,10 @@
+{% if messages %}
+<div class="container-xl pt-3" aria-label="Notifications">
+  {% for message in messages %}
+  <div class="alert {% if message.level == 40 %}alert-danger{% elif message.level == 30 %}alert-warning{% elif message.level == 25 %}alert-success{% else %}alert-info{% endif %} alert-dismissible" role="{% if message.level >= 30 %}alert{% else %}status{% endif %}">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss notification"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

@@ -1,0 +1,16 @@
+{% extends 'layouts/base.html' %}
+{% block content %}
+{% include 'partials/home/hero.html' %}
+{% include 'partials/home/workflow.html' %}
+{% include 'partials/home/features.html' %}
+{% include 'partials/home/benefits.html' %}
+{% include 'partials/home/industries.html' %}
+{% include 'partials/home/preview.html' %}
+{% include 'partials/home/trust.html' %}
+<section class="container-xl access-section" id="sign-in" aria-labelledby="access-title">
+  <div class="access-panel d-flex flex-wrap align-items-center justify-content-between gap-4">
+    <div><p class="eyebrow text-brand">YOUR NEXT CHAPTER IN TRADE</p><h2 id="access-title">A clearer way to work.</h2><p class="text-secondary mb-0">Workspace sign-in will be available when account access launches.</p></div>
+    <span class="badge access-badge">Sign In · Coming soon</span>
+  </div>
+</section>
+{% endblock %}

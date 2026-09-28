@@ -1,0 +1,13 @@
+<section class="features-section" id="features" aria-labelledby="features-title">
+  <div class="container-xl">
+    <div class="row align-items-end mb-5 g-3"><div class="col-lg-7"><p class="eyebrow text-brand">PURPOSE-BUILT FOR TRADE</p><h2 id="features-title">Every operation.<br>One connected platform.</h2></div><div class="col-lg-5"><p class="text-secondary section-description mb-0">From customer relationships to certification and revenue, bring the entire trade lifecycle into focus.</p></div></div>
+    <div class="row g-4">
+      {% include 'components/capability_card.html' with icon='users' detail='Connect account context and customer records to certification and commercial activity.' title='Customer Management' description='Manage customers, organizations, and commercial relationships with a shared view of every account.' only %}
+      {% include 'components/capability_card.html' with icon='file-certificate' detail='Bring application documents, review stages, and approval decisions into a coherent certification lifecycle.' title='Product Certification' description='Manage certification requests, supporting documentation, and approval workflows.' only %}
+      {% include 'components/capability_card.html' with icon='shield-check' detail='Keep certificate requirements and issuance progress visible across the SONCAP process.' title='SONCAP' description='Track SONCAP certificates from the initial request through issuance.' only %}
+      {% include 'components/capability_card.html' with icon='clipboard-check' detail='Connect inspection assignments and outcomes to the certification request they support.' title='Inspection Management' description='Schedule, assign, and monitor inspections to keep teams and deliverables aligned.' only %}
+      {% include 'components/capability_card.html' with icon='receipt' detail='Follow commercial work from quotation to invoice, with payment records linked to the customer.' title='Commercial Operations' description='Generate quotations, invoices, and payment records connected to your commercial operations.' only %}
+      {% include 'components/capability_card.html' with icon='chart-bar' detail='Give operational teams and executives a shared view of activity, priorities, and performance.' title='Reporting & Analytics' description='Bring progress and performance into focus with interactive dashboards powered by ApexCharts.' only %}
+    </div>
+  </div>
+</section>

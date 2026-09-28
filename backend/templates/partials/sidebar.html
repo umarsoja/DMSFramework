@@ -1,0 +1,15 @@
+{% if sidebar_items %}
+<aside class="navbar navbar-vertical navbar-expand-lg" aria-label="Workspace navigation">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{% url 'home' %}">{% include 'partials/brand.html' %}</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#workspace-navigation" aria-controls="workspace-navigation" aria-expanded="false" aria-label="Toggle workspace navigation"><span class="navbar-toggler-icon"></span></button>
+    <nav class="collapse navbar-collapse" id="workspace-navigation">
+      <ul class="navbar-nav">
+        {% for item in sidebar_items %}
+        <li class="nav-item{% if item.active %} active{% endif %}"><a class="nav-link" href="{{ item.url }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </div>
+</aside>
+{% endif %}

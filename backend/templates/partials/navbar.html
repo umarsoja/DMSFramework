@@ -1,0 +1,18 @@
+<header class="navbar navbar-expand-xl tf-navbar">
+  <div class="container-xl">
+    <a class="navbar-brand" href="{% url 'home' %}" aria-label="TradeFlow home">{% include 'partials/brand.html' %}</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#public-navigation" aria-controls="public-navigation" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <nav class="collapse navbar-collapse" id="public-navigation" aria-label="Main navigation">
+      <div class="navbar-nav ms-auto align-items-xl-center gap-xl-3">
+        <a class="nav-link" href="{% url 'home' %}#platform">Platform</a>
+        <a class="nav-link" href="{% url 'home' %}#features">Capabilities</a>
+        <a class="nav-link" href="{% url 'home' %}#designed-for">Industries</a>
+        <a class="nav-link" href="{% url 'home' %}#documentation">Documentation</a>
+        <a class="nav-link" href="{% url 'home' %}#contact">Contact</a>
+        <a class="btn btn-primary" href="{% url 'home' %}#sign-in">Sign In <span aria-hidden="true">↗</span></a>
+      </div>
+    </nav>
+  </div>
+</header>

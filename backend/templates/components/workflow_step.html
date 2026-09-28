@@ -1,0 +1,5 @@
+<li class="process-step"{% if step_id %} id="{{ step_id }}"{% endif %}>
+  <span class="process-number">{{ number }}</span>
+  <span class="process-icon">{% include 'components/icon.html' with name=icon only %}</span>
+  <span class="process-label">{{ title }}</span>
+</li>

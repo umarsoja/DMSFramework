@@ -159,7 +159,7 @@ USE_TZ = True
 # STATIC FILES
 # =============================================================================
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",

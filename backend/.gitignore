@@ -21,3 +21,8 @@ media/
 # IDE
 .vscode/
 .idea/
+
+# Generated frontend and collected deployment assets
+node_modules/
+static/vendor/
+staticfiles/

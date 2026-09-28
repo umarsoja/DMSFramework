@@ -1,0 +1,14 @@
+<section class="workflow-section" id="workflow" aria-labelledby="workflow-title">
+  <div class="container-xl">
+    <div class="workflow-heading"><div><p class="eyebrow text-brand">THE CONNECTED TRADE LIFECYCLE</p><h2 id="workflow-title">From relationship to results.</h2></div><p class="text-secondary">An illustrative journey through TradeFlow.</p></div>
+    <ol class="process-list">
+      {% include 'components/workflow_step.html' with number='01' icon='users' title='Customer' only %}
+      {% include 'components/workflow_step.html' with number='02' icon='file-certificate' title='Certification Request' only %}
+      {% include 'components/workflow_step.html' with number='03' icon='clipboard-check' title='Inspection' only %}
+      {% include 'components/workflow_step.html' with number='04' icon='shield-check' title='Approval' only %}
+      {% include 'components/workflow_step.html' with number='05' icon='file-description' title='Quotation' only %}
+      {% include 'components/workflow_step.html' with number='06' icon='receipt' title='Invoice' only %}
+      {% include 'components/workflow_step.html' with number='07' icon='chart-bar' title='Reporting' only %}
+    </ol>
+  </div>
+</section>

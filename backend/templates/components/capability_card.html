@@ -1,0 +1,10 @@
+<div class="col-md-6 col-lg-4">
+  <article class="card feature-card h-100">
+    <div class="card-body">
+      <span class="card-icon">{% include 'components/icon.html' with name=icon only %}</span>
+      <h3 class="card-title">{{ title }}</h3>
+      <p class="text-secondary">{{ description }}</p>
+      {% if detail %}<details class="feature-detail"><summary>Learn More <span class="visually-hidden">about {{ title }}</span><span aria-hidden="true">↗</span></summary><p>{{ detail }}</p></details>{% endif %}
+    </div>
+  </article>
+</div>
