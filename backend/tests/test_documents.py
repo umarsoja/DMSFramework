@@ -22,6 +22,7 @@ from apps.documents.models import (
     WorkflowDecision,
     WorkflowTask,
 )
+from apps.documents.pdf import render_memo_pdf
 from apps.documents.services import (
     archive_document,
     create_memo,
@@ -185,6 +186,25 @@ class InternalMemoLifecycleTests(TestCase):
         finalized_event = document.audit_events.get(action=AuditEvent.Action.FINALIZED)
         self.assertEqual(finalized_event.version, submitted_version)
         self.assertEqual(document.current_version_number, later_version.number)
+
+        self.client.force_login(self.owner)
+        with patch("apps.documents.views.render_memo_pdf", wraps=render_memo_pdf) as pdf_renderer:
+            response = self.client.get(reverse("documents:memo-pdf-view", args=[document.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF-"))
+        rendered_version = pdf_renderer.call_args.kwargs["version"]
+        self.assertEqual(rendered_version.pk, submitted_version.pk)
+        self.assertNotEqual(rendered_version.pk, document.current_version.pk)
+        viewed_event = document.audit_events.get(action=AuditEvent.Action.PDF_VIEWED)
+        self.assertEqual(viewed_event.version, submitted_version)
+        download_response = self.client.get(reverse("documents:memo-pdf-download", args=[document.pk]))
+        self.assertEqual(download_response.status_code, 200)
+        downloaded_event = document.audit_events.get(action=AuditEvent.Action.DOWNLOADED, context__kind="pdf")
+        self.assertEqual(downloaded_event.version, submitted_version)
+
+        archive_document(document=document, actor=self.owner)
+        archived_event = document.audit_events.get(action=AuditEvent.Action.ARCHIVED)
+        self.assertEqual(archived_event.version, submitted_version)
 
     def test_workflow_task_rejects_missing_or_cross_document_version_binding(self):
         document = self.submit(self.make_draft())

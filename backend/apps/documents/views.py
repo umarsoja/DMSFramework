@@ -16,6 +16,7 @@ from .models import Attachment, AuditEvent, Document, WorkflowDecision, Workflow
 from .pdf import render_memo_pdf
 from .services import (
     archive_document,
+    approved_workflow_version,
     create_memo,
     decide_review,
     finalize_document,
@@ -224,8 +225,8 @@ def archive_memo(request, pk):
     return redirect("documents:memo-detail", pk=document.pk)
 
 
-def _pdf_response(document, *, download):
-    pdf = render_memo_pdf(document)
+def _pdf_response(document, *, download, version):
+    pdf = render_memo_pdf(document, version=version)
     filename = f"{document.reference.replace('/', '-')}.pdf"
     response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = f'{"attachment" if download else "inline"}; filename="{filename}"'
@@ -243,8 +244,9 @@ def _final_memo_for_user(request, pk):
 @login_required
 def memo_pdf_view(request, pk):
     document = _final_memo_for_user(request, pk)
-    response = _pdf_response(document, download=False)
-    record_access(document=document, actor=request.user, action=AuditEvent.Action.PDF_VIEWED)
+    version = approved_workflow_version(document)
+    response = _pdf_response(document, download=False, version=version)
+    record_access(document=document, actor=request.user, action=AuditEvent.Action.PDF_VIEWED, version=version)
     return response
 
 
@@ -253,8 +255,10 @@ def memo_pdf_download(request, pk):
     document = _final_memo_for_user(request, pk)
     if not can_download_document(request.user, document):
         raise PermissionDenied("You have view access but not download access.")
-    response = _pdf_response(document, download=True)
-    record_access(document=document, actor=request.user, action=AuditEvent.Action.DOWNLOADED, context={"kind": "pdf"})
+    version = approved_workflow_version(document)
+    response = _pdf_response(document, download=True, version=version)
+    record_access(document=document, actor=request.user, action=AuditEvent.Action.DOWNLOADED,
+                  context={"kind": "pdf"}, version=version)
     return response
 
 

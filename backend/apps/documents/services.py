@@ -206,6 +206,21 @@ def decide_review(*, task_id, actor, outcome, comment=""):
     return decision
 
 
+def _latest_approved_task(document):
+    workflow = WorkflowInstance.objects.filter(document=document).first()
+    approved_task = workflow.tasks.filter(status=WorkflowTask.Status.APPROVED).select_related(
+        "submitted_version"
+    ).order_by("-cycle").first() if workflow else None
+    if not approved_task or not approved_task.submitted_version_id:
+        raise ValidationError("The approved workflow has no safely identified document version to finalize.")
+    return approved_task
+
+
+def approved_workflow_version(document):
+    """Return the exact version bound to the latest approved workflow task."""
+    return _latest_approved_task(document).submitted_version
+
+
 @transaction.atomic
 def finalize_document(*, document, actor):
     document = Document.objects.select_for_update().get(pk=document.pk)
@@ -214,11 +229,7 @@ def finalize_document(*, document, actor):
     if document.status != Document.Status.APPROVED:
         raise ValidationError("Only an approved memo can be finalized.")
     workflow = document.workflow
-    approved_task = workflow.tasks.filter(status=WorkflowTask.Status.APPROVED).select_related(
-        "submitted_version"
-    ).order_by("-cycle").first()
-    if not approved_task or not approved_task.submitted_version_id:
-        raise ValidationError("The approved workflow has no safely identified document version to finalize.")
+    approved_task = _latest_approved_task(document)
     document.status = Document.Status.FINALIZED
     document.finalized_by = actor
     document.finalized_at = timezone.now()
@@ -242,13 +253,15 @@ def archive_document(*, document, actor):
     document.archived_by = actor
     document.archived_at = timezone.now()
     document.save(update_fields=["status", "archived_by", "archived_at", "modified_at"])
-    _record(document, actor, AuditEvent.Action.ARCHIVED, version=document.current_version)
+    _record(document, actor, AuditEvent.Action.ARCHIVED, version=approved_workflow_version(document))
     return document
 
 
 @transaction.atomic
-def record_access(*, document, actor, action, context=None):
-    return _record(document, actor, action, version=document.current_version, context=context)
+def record_access(*, document, actor, action, context=None, version=None):
+    if version is None:
+        version = document.current_version
+    return _record(document, actor, action, version=version, context=context)
 
 
 @transaction.atomic

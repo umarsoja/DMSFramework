@@ -23,8 +23,10 @@ def _plain_paragraph(value, style):
     return Paragraph(escape(str(value or "")).replace("\n", "<br/>"), style)
 
 
-def render_memo_pdf(document):
-    version = document.current_version
+def render_memo_pdf(document, *, version=None):
+    version = version or document.current_version
+    if version.document_id != document.pk:
+        raise ValueError("The rendered version must belong to the document.")
     content = version.content
     buffer = BytesIO()
     styles = getSampleStyleSheet()
@@ -107,6 +109,7 @@ def render_memo_pdf(document):
 
     approval = WorkflowDecision.objects.filter(
         task__instance__document=document,
+        task__submitted_version=version,
         outcome=WorkflowDecision.Outcome.APPROVE,
     ).select_related("actor", "actor_assignment__department", "actor_assignment__position").order_by("-decided_at").first()
     story.append(Paragraph("Approval and finalization", styles["APGCSection"]))
