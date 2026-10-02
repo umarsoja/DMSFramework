@@ -5,6 +5,7 @@ from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
 
+from .handlers import INTERNAL_MEMO_TYPE_CODE, get_document_type_handler
 from .models import (
     Attachment,
     AuditEvent,
@@ -17,17 +18,6 @@ from .models import (
     WorkflowInstance,
     WorkflowTask,
 )
-
-
-def _content_from_values(values):
-    return {
-        "to": values["to"].strip(),
-        "through": values.get("through", "").strip(),
-        "cc": values.get("cc", "").strip(),
-        "subject": values["subject"].strip(),
-        "body": values["body"].strip(),
-        "classification": values["classification"],
-    }
 
 
 def _record(document, actor, action, *, version=None, context=None):
@@ -120,8 +110,8 @@ def _submit_locked(document, actor, reviewer, *, resubmitted=False):
 def create_memo(*, owner, values, uploads=(), reviewer=None):
     from apps.organization.services import current_assignment
 
-    content = _content_from_values(values)
-    document_type = DocumentType.objects.get(code="IM", is_active=True)
+    content = get_document_type_handler(INTERNAL_MEMO_TYPE_CODE).prepare_payload(values)
+    document_type = DocumentType.objects.get(code=INTERNAL_MEMO_TYPE_CODE, is_active=True)
     document = Document.objects.create(
         document_type=document_type,
         title=content["subject"],
@@ -158,7 +148,7 @@ def save_memo(*, document, actor, values, uploads=(), revision_note="", reviewer
     if document.status == Document.Status.RETURNED and not revision_note.strip():
         raise ValidationError("Add a revision note before saving a returned memo.")
 
-    content = _content_from_values(values)
+    content = get_document_type_handler(INTERNAL_MEMO_TYPE_CODE).prepare_payload(values)
     version = _new_version(document, actor, content, revision_note=revision_note, uploads=uploads)
     if document.status == Document.Status.RETURNED:
         _record(document, actor, AuditEvent.Action.REVISION_SAVED, version=version,
