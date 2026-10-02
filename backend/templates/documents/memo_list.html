@@ -1,0 +1,44 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Internal memos | APGC DMS{% endblock %}
+{% block content %}
+<section class="container-xl dms-page" aria-labelledby="page-title">
+  <div class="dms-page-header">
+    <div><p class="eyebrow text-brand">DOCUMENT WORKSPACE</p><h1 id="page-title">Internal memos</h1><p class="text-secondary">Create drafts, follow reviews, and find memos you are permitted to access.</p></div>
+    <a class="btn btn-primary" href="{% url 'documents:memo-create' %}">Create memo <span aria-hidden="true">＋</span></a>
+  </div>
+
+  <form class="card memo-filter" method="get" role="search" aria-label="Search internal memos">
+    <div class="card-body d-flex flex-wrap align-items-end gap-3">
+      <div class="flex-fill"><label class="form-label" for="memo-search">Search</label><input class="form-control" id="memo-search" name="q" type="search" value="{{ query }}" placeholder="Reference or subject"></div>
+      <div><label class="form-label" for="memo-status">Status</label><select class="form-select" id="memo-status" name="status"><option value="">All statuses</option>{% for value,label in statuses %}<option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <button class="btn btn-outline-primary" type="submit">Filter</button>
+    </div>
+  </form>
+
+  {% if page.object_list %}
+  <div class="table-responsive memo-table-wrap">
+    <table class="table table-vcenter">
+      <caption class="visually-hidden">Internal memos available to you</caption>
+      <thead><tr><th scope="col">Reference</th><th scope="col">Subject</th><th scope="col">Owner</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Open</span></th></tr></thead>
+      <tbody>{% for document in page.object_list %}
+        <tr>
+          <td data-label="Reference"><a class="memo-reference" href="{% url 'documents:memo-detail' document.pk %}">{{ document.reference }}</a></td>
+          <td data-label="Subject">{{ document.title }}</td>
+          <td data-label="Owner">{{ document.created_by.get_full_name|default:document.created_by.get_username }}</td>
+          <td data-label="Updated"><time datetime="{{ document.modified_at|date:'c' }}">{{ document.modified_at|date:'d M Y, H:i' }}</time></td>
+          <td data-label="Status">{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}</td>
+          <td class="memo-row-action"><a class="btn btn-sm btn-outline-primary" href="{% url 'documents:memo-detail' document.pk %}">Open<span class="visually-hidden"> {{ document.reference }}</span></a></td>
+        </tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+  {% if page.paginator.num_pages > 1 %}<nav class="memo-pagination" aria-label="Memo pages"><ul class="pagination">
+    {% if page.has_previous %}<li class="page-item"><a class="page-link" href="?q={{ query|urlencode }}&amp;status={{ status_filter|urlencode }}&amp;page={{ page.previous_page_number }}" aria-label="Previous page">Previous</a></li>{% endif %}
+    <li class="page-item active"><span class="page-link" aria-current="page">{{ page.number }} of {{ page.paginator.num_pages }}</span></li>
+    {% if page.has_next %}<li class="page-item"><a class="page-link" href="?q={{ query|urlencode }}&amp;status={{ status_filter|urlencode }}&amp;page={{ page.next_page_number }}" aria-label="Next page">Next</a></li>{% endif %}
+  </ul></nav>{% endif %}
+  {% else %}
+  <div class="empty-state"><span class="empty-state-icon" aria-hidden="true">▤</span><h2>{% if query or status_filter %}No matching memos{% else %}No memos yet{% endif %}</h2><p>{% if query or status_filter %}Try another search or status filter.{% else %}Start a memo draft when you are ready.{% endif %}</p>{% if not query and not status_filter %}<a class="btn btn-primary" href="{% url 'documents:memo-create' %}">Create the first memo</a>{% endif %}</div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,9 +1,7 @@
-<footer class="footer tf-footer"><div class="container-xl">
+<footer class="footer tf-footer apgc-footer"><div class="container-xl">
   <div class="row g-4 pb-5">
-    <div class="col-lg-5"><a class="navbar-brand mb-3" href="{% url 'home' %}">{% include 'partials/brand.html' %}</a><p class="footer-product">Enterprise Trade Operations Platform</p><p class="text-secondary small">Clarity at every stage of trade.</p></div>
-    <nav class="col-6 col-lg-2" aria-label="Quick links"><h2 class="footer-heading">Quick Links</h2><ul class="footer-links"><li><a href="{% url 'home' %}#platform">Platform</a></li><li><a href="{% url 'home' %}#features">Capabilities</a></li><li><a href="{% url 'home' %}#designed-for">Industries</a></li><li>{% include 'components/resource_notice.html' with resource_id='documentation' title='Documentation' description='Product documentation will be published with the platform release.' only %}</li><li>{% include 'components/resource_notice.html' with title='Support' description='Support channels will be announced when workspace access launches.' only %}</li></ul></nav>
-    <div class="col-6 col-lg-2"><h2 class="footer-heading">Legal</h2><div class="footer-links">{% include 'components/resource_notice.html' with title='Privacy Policy' description='The privacy policy is awaiting publication before account access launches.' only %}{% include 'components/resource_notice.html' with title='Terms of Use' description='Terms of service will be published before account access launches.' only %}</div></div>
-    <div class="col-sm-6 col-lg-3" id="contact"><h2 class="footer-heading">Contact</h2><p class="footer-product">Sojh Consult</p><p class="text-secondary small">Official contact details will be published with the platform release.</p></div>
+    <div class="col-lg-7"><a class="navbar-brand mb-3" href="{% url 'home' %}">{% include 'partials/brand.html' %}</a><p class="footer-product">Document Management System</p><p class="text-secondary small">A central workspace for APGC organisational documents.</p></div>
+    <nav class="col-6 col-lg-3" aria-label="Quick links"><h2 class="footer-heading">Quick Links</h2><ul class="footer-links"><li><a href="{% url 'home' %}#platform">Overview</a></li><li><a href="{% url 'home' %}#capabilities">Capabilities</a></li><li><a href="{% url 'admin:login' %}">Sign in</a></li></ul></nav>
   </div>
-  <div class="footer-bottom"><span>&copy; {% now 'Y' %} Sojh Consult</span><span class="version-label">Version <strong>v0.1.0</strong></span><a href="{% url 'home' %}#platform">Back to top ↑</a></div>
+  <div class="footer-bottom"><span>&copy; {% now 'Y' %} Alliance Power Generation Company</span><a href="{% url 'home' %}#platform">Back to top ↑</a></div>
 </div></footer>

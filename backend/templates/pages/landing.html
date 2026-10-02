@@ -1,16 +1,23 @@
 {% extends 'layouts/base.html' %}
+{% block title %}APGC DMS | Alliance Power Generation Company{% endblock %}
+{% block meta_description %}Securely create, manage, route, approve and retrieve organisational documents with the APGC Document Management System.{% endblock %}
 {% block content %}
 {% include 'partials/home/hero.html' %}
-{% include 'partials/home/workflow.html' %}
-{% include 'partials/home/features.html' %}
-{% include 'partials/home/benefits.html' %}
-{% include 'partials/home/industries.html' %}
-{% include 'partials/home/preview.html' %}
-{% include 'partials/home/trust.html' %}
+<section class="features-section apgc-capabilities" id="capabilities" aria-labelledby="capabilities-title">
+  <div class="container-xl">
+    <div class="section-intro"><p class="eyebrow text-brand">A CLEARER DOCUMENT LIFECYCLE</p><h2 id="capabilities-title">The right information, with the right people.</h2><p class="section-description text-secondary">APGC DMS brings document handling and review into a consistent, organised experience.</p></div>
+    <div class="row g-4">
+      {% include 'components/capability_card.html' with icon='file-description' title='Document Management' description='Create, organise and retrieve organisational documents from a central workspace.' only %}
+      {% include 'components/capability_card.html' with icon='arrows-exchange' title='Workflow & Approvals' description='Route documents through review and approval steps with clear ownership.' only %}
+      {% include 'components/capability_card.html' with icon='shield-check' title='Secure Access' description='Provide access to the workspace through the application’s existing sign-in.' only %}
+      {% include 'components/capability_card.html' with icon='clipboard-check' title='Document History' description='Keep document changes and review activity visible for traceability.' only %}
+    </div>
+  </div>
+</section>
 <section class="container-xl access-section" id="sign-in" aria-labelledby="access-title">
-  <div class="access-panel d-flex flex-wrap align-items-center justify-content-between gap-4">
-    <div><p class="eyebrow text-brand">YOUR NEXT CHAPTER IN TRADE</p><h2 id="access-title">A clearer way to work.</h2><p class="text-secondary mb-0">Workspace sign-in will be available when account access launches.</p></div>
-    <span class="badge access-badge">Sign In · Coming soon</span>
+  <div class="access-panel apgc-access d-flex flex-wrap align-items-center justify-content-between gap-4">
+    <div><p class="eyebrow text-brand">APGC DOCUMENT MANAGEMENT SYSTEM</p><h2 id="access-title">Sign in to your workspace.</h2><p class="text-secondary mb-0">Use your organisation account to continue to APGC DMS.</p></div>
+    <a class="btn btn-primary btn-lg" href="{% url 'admin:login' %}">Continue to sign in <span aria-hidden="true">↗</span></a>
   </div>
 </section>
 {% endblock %}

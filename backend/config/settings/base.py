@@ -61,7 +61,8 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-    # "apps.accounts",
+    "apps.documents.apps.DocumentsConfig",
+    "apps.organization.apps.OrganizationConfig",
     # "apps.dashboard",
 ]
 
@@ -226,11 +227,11 @@ TRADEFLOW = {
 }
 
 #Login URLs
-LOGIN_URL = "login"
+LOGIN_URL = "admin:login"
 
-LOGIN_REDIRECT_URL = "dashboard"
+LOGIN_REDIRECT_URL = "home"
 
-LOGOUT_REDIRECT_URL = "login"
+LOGOUT_REDIRECT_URL = "admin:login"
 
 #CRSF
 CSRF_TRUSTED_ORIGINS = env.list(

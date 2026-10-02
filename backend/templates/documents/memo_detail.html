@@ -1,0 +1,36 @@
+{% extends 'layouts/base.html' %}
+{% block title %}{{ document.reference }} | APGC DMS{% endblock %}
+{% block content %}
+<section class="container-xl dms-page memo-detail" aria-labelledby="page-title">
+  <header class="dms-page-header memo-detail-header">
+    <div><p class="eyebrow text-brand">{{ document.document_type.name|upper }} · {{ document.reference }}</p><h1 id="page-title">{{ document.title }}</h1><div class="memo-header-meta">{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}<span>Version {{ version.number }}</span><span>Created {{ document.memo_date|date:'d M Y' }}</span></div></div>
+    <div class="memo-detail-actions">
+      {% if can_edit %}<a class="btn btn-outline-primary" href="{% url 'documents:memo-edit' document.pk %}">{% if document.status == 'RETURNED' %}Revise memo{% else %}Edit draft{% endif %}</a>{% endif %}
+      {% if can_view_pdf %}<a class="btn btn-outline-primary" href="{% url 'documents:memo-pdf-view' document.pk %}" target="_blank" rel="noopener">View PDF</a>{% if can_download %}<a class="btn btn-primary" href="{% url 'documents:memo-pdf-download' document.pk %}">Download PDF</a>{% endif %}{% endif %}
+    </div>
+  </header>
+
+  <section class="card detail-summary-card" aria-label="Current responsibility"><div class="card-body detail-summary">
+    <div><span class="summary-label">Created by</span><strong>{{ document.created_by.get_full_name|default:document.created_by.get_username }}</strong></div>
+    <div><span class="summary-label">Current responsibility</span><strong>{% if responsible_user %}{{ responsible_user.get_full_name|default:responsible_user.get_username }}{% elif document.status == 'APPROVED' %}Memo owner · ready to finalize{% elif document.status == 'FINALIZED' %}Memo owner · ready to archive{% else %}No pending action{% endif %}</strong></div>
+    <div><span class="summary-label">Classification</span><strong>{{ document.get_classification_display }}</strong></div>
+  </div></section>
+
+  {% if review_task %}{% include 'components/approval_panel.html' with document=document task=review_task only %}{% endif %}
+  {% if can_finalize %}<form class="card action-panel" action="{% url 'documents:memo-finalize' document.pk %}" method="post">{% csrf_token %}<div><strong>Review approved</strong><p class="text-secondary mb-0">Finalize the approved memo to produce its official PDF representation.</p></div><button class="btn btn-primary" type="submit">Finalize memo</button></form>{% endif %}
+  {% if can_archive %}<form class="card action-panel" action="{% url 'documents:memo-archive' document.pk %}" method="post">{% csrf_token %}<div><strong>Memo finalized</strong><p class="text-secondary mb-0">Archive this memo when it is ready to leave the active workspace.</p></div><button class="btn btn-outline-primary" type="submit">Archive memo</button></form>{% endif %}
+
+  <div class="memo-detail-grid">
+    <div class="memo-detail-main">
+      <section class="card detail-section" aria-labelledby="info-title"><div class="card-header"><h2 id="info-title" class="card-title">Document information</h2></div><div class="card-body">{% include 'components/document_metadata.html' with document=document version=version only %}</div></section>
+      <section class="card detail-section" aria-labelledby="content-title"><div class="card-header"><h2 id="content-title" class="card-title">Content</h2></div><div class="card-body"><div class="memo-body">{{ version.content.body|linebreaksbr }}</div></div></section>
+      <section class="card detail-section" aria-labelledby="attachments-title"><div class="card-header"><h2 id="attachments-title" class="card-title">Attachments</h2></div><div class="card-body">{% include 'components/attachment_list.html' with document=document version=version can_download=can_download only %}</div></section>
+    </div>
+    <aside class="memo-detail-side">
+      <section class="card detail-section" aria-labelledby="workflow-title"><div class="card-header"><h2 id="workflow-title" class="card-title">Workflow</h2></div><div class="card-body">{% include 'components/workflow_timeline.html' with tasks=tasks decisions=decisions only %}</div></section>
+      <section class="card detail-section" aria-labelledby="versions-title"><div class="card-header"><h2 id="versions-title" class="card-title">Version history</h2></div><div class="card-body">{% include 'components/version_history.html' with versions=versions current_version=version only %}</div></section>
+      <section class="card detail-section" aria-labelledby="audit-title"><div class="card-header"><h2 id="audit-title" class="card-title">Audit history</h2></div><div class="card-body">{% include 'components/audit_timeline.html' with events=audit_events only %}</div></section>
+    </aside>
+  </div>
+</section>
+{% endblock %}

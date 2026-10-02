@@ -1,0 +1,11 @@
+:root { color-scheme: light; --primary: #302f6e; --secondary: #03a9f4; --accent: #29b675; --header-bg: #302f6e; --header-color: #fff; --link-fg: #302f6e; --link-hover-color: #242354; --link-selected-fg: #03a9f4; }
+html[data-theme="auto"], html[data-theme="dark"] { --primary: #302f6e; --primary-fg: #fff; --secondary: #03a9f4; --accent: #29b675; --body-fg: #202433; --body-bg: #f6f8fb; --body-quiet-color: #687083; --body-medium-color: #4a5264; --body-loud-color: #202433; --breadcrumbs-link-fg: #fff; --breadcrumbs-bg: #302f6e; --link-fg: #302f6e; --link-hover-color: #242354; --link-selected-fg: #03a9f4; --hairline-color: #e1e6ef; --border-color: #cdd4e0; --darkened-bg: #f6f8fb; --selected-bg: #eef1f5; --selected-row: #eaf8ff; --button-fg: #fff; --button-bg: #302f6e; --button-hover-bg: #242354; color-scheme: light; }
+#site-name a { display: inline-flex; align-items: center; gap: 1rem; color: #fff; font-size: 1rem; }
+.apgc-admin-logo { width: min(230px, 34vw); height: auto; max-height: 48px; object-fit: contain; background: #fff; border-radius: 4px; }
+#header { background: #302f6e; }
+#branding h1 { margin: 0; }
+.login #container { border-top: 4px solid #29b675; border-radius: 8px; overflow: hidden; }
+.login .form-row input { min-height: 40px; }
+.login .submit-row input { min-height: 40px; padding-inline: 1.2rem; background: #302f6e; border-radius: 5px; font-weight: 600; }
+.login .submit-row input:hover { background: #242354; }
+@media (max-width: 600px) { #site-name a { gap: .6rem; font-size: .82rem; } .apgc-admin-logo { width: min(172px, 38vw); } }

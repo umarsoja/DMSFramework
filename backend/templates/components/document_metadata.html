@@ -1,0 +1,11 @@
+<dl class="document-metadata memo-metadata">
+  <div><dt>Reference number</dt><dd>{{ document.reference }}</dd></div>
+  <div><dt>Date</dt><dd>{{ document.memo_date|date:'d F Y' }}</dd></div>
+  <div><dt>From</dt><dd>{{ document.created_by.get_full_name|default:document.created_by.get_username }}</dd></div>
+  {% if document.originating_assignment %}<div><dt>Originating department</dt><dd>{{ document.originating_assignment.department_name_snapshot }}</dd></div><div><dt>Originating position</dt><dd>{{ document.originating_assignment.position_title_snapshot }}</dd></div>{% endif %}
+  <div><dt>To</dt><dd>{{ version.content.to }}</dd></div>
+  <div><dt>Through</dt><dd>{{ version.content.through|default:'—' }}</dd></div>
+  <div><dt>CC</dt><dd>{{ version.content.cc|default:'—' }}</dd></div>
+  <div><dt>Subject</dt><dd>{{ version.content.subject }}</dd></div>
+  <div><dt>Classification</dt><dd>{{ document.get_classification_display }}</dd></div>
+</dl>

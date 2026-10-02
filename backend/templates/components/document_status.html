@@ -1,0 +1,1 @@
+<span class="badge status-indicator{% if status == 'APPROVED' or status == 'FINALIZED' or status == 'ARCHIVED' %} status-approved{% elif status == 'UNDER_REVIEW' %} status-pending{% elif status == 'RETURNED' %} status-danger{% else %} status-neutral{% endif %}">{{ display }}</span>

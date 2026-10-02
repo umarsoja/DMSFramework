@@ -11,10 +11,20 @@ class PresentationTests(SimpleTestCase):
         response = self.client.get(reverse("home"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "layouts/base.html")
-        self.assertContains(response, "Customer Management")
+        self.assertContains(response, "Document Management")
+        self.assertContains(response, "Alliance Power Generation Company")
+        self.assertContains(response, "/static/apgc/brand/alliance-power-logo.png")
+        self.assertContains(response, "/static/apgc/brand/favicon.png")
+        self.assertContains(response, reverse("admin:login"))
         self.assertContains(response, 'id="sign-in"')
         self.assertNotContains(response, "TradeFlow is running successfully.")
         self.assertEqual(self.client.get(reverse("health")).status_code, 200)
+
+    def test_existing_admin_login_is_the_sign_in_destination(self):
+        response = self.client.get(reverse("admin:login"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Document Management System")
+        self.assertContains(response, "/static/apgc/css/apgc-admin.css")
 
     def test_notifications_escape_content_and_map_error_level(self):
         html = render_to_string("partials/messages.html", {"messages": [

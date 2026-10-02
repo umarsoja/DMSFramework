@@ -1,0 +1,12 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}APGC DMS | {% block admin_title %}Administration{% endblock %}{% endblock %}
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="icon" type="image/png" href="{% static 'apgc/brand/favicon.png' %}">
+  <link rel="stylesheet" href="{% static 'apgc/css/apgc-admin.css' %}">
+{% endblock %}
+{% block branding %}
+  <h1 id="site-name"><a href="{% url 'admin:index' %}" aria-label="APGC DMS administration home"><img class="apgc-admin-logo" src="{% static 'apgc/brand/alliance-power-logo.png' %}" alt="Alliance Power Generation Company"><span>Document Management System</span></a></h1>
+{% endblock %}

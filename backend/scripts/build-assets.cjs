@@ -1,5 +1,5 @@
 /** Copy locked npm distributions into Django's static discovery directory. */
-const { copyFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } = require('node:fs');
 const { resolve, dirname } = require('node:path');
 const root = resolve(__dirname, '..');
 const assets = {
@@ -22,10 +22,24 @@ const iconNames = [
   'file-description', 'receipt', 'chart-bar', 'layout-dashboard',
   'arrows-exchange', 'building', 'download', 'upload', 'building-bank', 'briefcase',
 ];
+// Tabler 3.34 groups SVGs by category rather than placing them in one folder.
+const outlineDirectory = resolve(root, 'node_modules/@tabler/icons/categories/outline');
+const outlineIcons = new Map();
+function indexOutlineIcons(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const source = resolve(directory, entry.name);
+    if (entry.isDirectory()) indexOutlineIcons(source);
+    else if (entry.isFile() && entry.name.endsWith('.svg')) outlineIcons.set(entry.name.slice(0, -4), source);
+  }
+}
+indexOutlineIcons(outlineDirectory);
+const iconAliases = { briefcase: 'building' };
 const iconDirectory = resolve(root, 'static/vendor/tabler-icons');
 mkdirSync(iconDirectory, { recursive: true });
 const symbols = iconNames.map((name) => {
-  const source = readFileSync(resolve(root, `node_modules/@tabler/icons/icons/outline/${name}.svg`), 'utf8');
+  const sourcePath = outlineIcons.get(iconAliases[name] || name);
+  if (!sourcePath) throw new Error(`Tabler outline icon not found: ${name}`);
+  const source = readFileSync(sourcePath, 'utf8');
   const body = source.slice(source.indexOf('>', source.indexOf('<svg')) + 1, source.lastIndexOf('</svg>'));
   return `<symbol id="${name}" viewBox="0 0 24 24">${body}</symbol>`;
 });
