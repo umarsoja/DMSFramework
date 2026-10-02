@@ -175,6 +175,9 @@ class WorkflowTask(models.Model):
         RETURNED = "RETURNED", "Returned"
 
     instance = models.ForeignKey(WorkflowInstance, on_delete=models.CASCADE, related_name="tasks")
+    submitted_version = models.ForeignKey(
+        DocumentVersion, null=True, blank=True, on_delete=models.PROTECT, related_name="workflow_tasks",
+    )
     step = models.ForeignKey(WorkflowStep, on_delete=models.PROTECT, related_name="tasks")
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="dms_workflow_tasks")
     assigned_assignment = models.ForeignKey(
@@ -189,6 +192,21 @@ class WorkflowTask(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["instance", "step", "cycle"], name="uniq_workflow_task_cycle")]
         ordering = ["cycle", "step__sequence"]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            original_version_id = type(self).objects.only("submitted_version_id").get(pk=self.pk).submitted_version_id
+            if original_version_id != self.submitted_version_id:
+                raise ValidationError("A workflow task's submitted document version cannot be changed.")
+        elif not self.submitted_version_id:
+            raise ValidationError("A new workflow task must identify its submitted document version.")
+
+        if self.submitted_version_id:
+            if self.submitted_version.document_id != self.instance.document_id:
+                raise ValidationError({
+                    "submitted_version": "The submitted version must belong to the workflow's document."
+                })
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.instance.document.reference}: {self.step} ({self.get_status_display()})"
@@ -208,6 +226,11 @@ class WorkflowDecision(models.Model):
     outcome = models.CharField(max_length=12, choices=Outcome.choices)
     comment = models.TextField(blank=True)
     decided_at = models.DateTimeField(default=timezone.now, editable=False)
+
+    @property
+    def submitted_version(self):
+        """The version reviewed by this decision's immutable workflow task."""
+        return self.task.submitted_version
 
     def save(self, *args, **kwargs):
         if self.pk:

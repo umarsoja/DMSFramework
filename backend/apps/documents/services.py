@@ -65,12 +65,14 @@ def _new_version(document, actor, content, revision_note="", uploads=()):
     return version
 
 
-def _submit_locked(document, actor, reviewer, *, resubmitted=False):
+def _submit_locked(document, actor, reviewer, *, submitted_version, resubmitted=False):
     if document.status not in (Document.Status.DRAFT, Document.Status.RETURNED):
         raise ValidationError("Only a draft or returned document can be submitted.")
 
     if document.status == Document.Status.RETURNED and not resubmitted:
         raise ValidationError("Save a revision before resubmitting a returned document.")
+    if not submitted_version or submitted_version.document_id != document.pk:
+        raise ValidationError("The submitted version must belong to this document.")
 
     workflow = WorkflowInstance.objects.filter(document=document).first()
     if workflow:
@@ -92,17 +94,19 @@ def _submit_locked(document, actor, reviewer, *, resubmitted=False):
         raise ValidationError("A document creator cannot review their own memo.")
     cycle = workflow.tasks.aggregate(models_max=Max("cycle"))["models_max"] or 0
     cycle += 1
-    WorkflowTask.objects.create(instance=workflow, step=step, assigned_to=reviewer,
-                                assigned_assignment=reviewer_assignment, cycle=cycle)
+    WorkflowTask.objects.create(instance=workflow, submitted_version=submitted_version, step=step,
+                                assigned_to=reviewer, assigned_assignment=reviewer_assignment, cycle=cycle)
     workflow.status = WorkflowInstance.Status.IN_PROGRESS
     workflow.completed_at = None
     workflow.save(update_fields=["status", "completed_at"])
     document.status = Document.Status.UNDER_REVIEW
     document.save(update_fields=["status", "modified_at"])
     _record(document, actor, AuditEvent.Action.RESUBMITTED if resubmitted else AuditEvent.Action.SUBMITTED,
-            version=document.current_version, context={"reviewer_id": reviewer.pk, "cycle": cycle})
+            version=submitted_version,
+            context={"reviewer_id": reviewer.pk, "cycle": cycle, "workflow_id": workflow.pk})
     _record(document, actor, AuditEvent.Action.UNDER_REVIEW,
-            version=document.current_version, context={"reviewer_id": reviewer.pk, "cycle": cycle})
+            version=submitted_version,
+            context={"reviewer_id": reviewer.pk, "cycle": cycle, "workflow_id": workflow.pk})
     return workflow
 
 
@@ -132,7 +136,7 @@ def create_memo(*, owner, values, uploads=(), reviewer=None):
     )
     _record(document, owner, AuditEvent.Action.CREATED, version=version)
     if reviewer:
-        _submit_locked(document, owner, reviewer)
+        _submit_locked(document, owner, reviewer, submitted_version=version)
     else:
         _record(document, owner, AuditEvent.Action.DRAFT_SAVED, version=version)
     return document
@@ -156,7 +160,8 @@ def save_memo(*, document, actor, values, uploads=(), revision_note="", reviewer
     else:
         _record(document, actor, AuditEvent.Action.DRAFT_SAVED, version=version)
     if reviewer:
-        _submit_locked(document, actor, reviewer, resubmitted=document.status == Document.Status.RETURNED)
+        _submit_locked(document, actor, reviewer, submitted_version=version,
+                       resubmitted=document.status == Document.Status.RETURNED)
     return document
 
 
@@ -165,13 +170,15 @@ def decide_review(*, task_id, actor, outcome, comment=""):
     from apps.organization.services import current_assignment
 
     task = WorkflowTask.objects.select_for_update().select_related(
-        "instance__document", "instance__definition", "step"
+        "instance__document", "instance__definition", "step", "submitted_version"
     ).get(pk=task_id)
     document = Document.objects.select_for_update().get(pk=task.instance.document_id)
     if task.assigned_to_id != actor.pk or task.status != WorkflowTask.Status.PENDING:
         raise PermissionDenied("You do not have an active review assignment for this memo.")
     if document.status != Document.Status.UNDER_REVIEW:
         raise ValidationError("This memo is no longer awaiting review.")
+    if not task.submitted_version_id:
+        raise ValidationError("This workflow task has no safely identified submitted version and cannot be decided.")
     if outcome not in (WorkflowDecision.Outcome.APPROVE, WorkflowDecision.Outcome.RETURN):
         raise ValidationError("Choose approve or return for revision.")
     if outcome == WorkflowDecision.Outcome.RETURN and not comment.strip():
@@ -193,8 +200,9 @@ def decide_review(*, task_id, actor, outcome, comment=""):
     workflow = task.instance
     workflow.status = WorkflowInstance.Status.APPROVED if outcome == WorkflowDecision.Outcome.APPROVE else WorkflowInstance.Status.RETURNED
     workflow.save(update_fields=["status"])
-    _record(document, actor, action, version=document.current_version,
-            context={"decision_id": decision.pk, "comment": decision.comment})
+    _record(document, actor, action, version=task.submitted_version,
+            context={"decision_id": decision.pk, "task_id": task.pk,
+                     "workflow_id": workflow.pk, "comment": decision.comment})
     return decision
 
 
@@ -205,15 +213,21 @@ def finalize_document(*, document, actor):
         raise PermissionDenied("Only the memo owner can finalize it.")
     if document.status != Document.Status.APPROVED:
         raise ValidationError("Only an approved memo can be finalized.")
+    workflow = document.workflow
+    approved_task = workflow.tasks.filter(status=WorkflowTask.Status.APPROVED).select_related(
+        "submitted_version"
+    ).order_by("-cycle").first()
+    if not approved_task or not approved_task.submitted_version_id:
+        raise ValidationError("The approved workflow has no safely identified document version to finalize.")
     document.status = Document.Status.FINALIZED
     document.finalized_by = actor
     document.finalized_at = timezone.now()
     document.save(update_fields=["status", "finalized_by", "finalized_at", "modified_at"])
-    workflow = document.workflow
     workflow.status = WorkflowInstance.Status.COMPLETED
     workflow.completed_at = document.finalized_at
     workflow.save(update_fields=["status", "completed_at"])
-    _record(document, actor, AuditEvent.Action.FINALIZED, version=document.current_version)
+    _record(document, actor, AuditEvent.Action.FINALIZED, version=approved_task.submitted_version,
+            context={"workflow_id": workflow.pk, "task_id": approved_task.pk})
     return document
 
 
@@ -286,7 +300,8 @@ def reassign_task(*, task_id, actor, new_user, reason):
     task.assigned_to = resolved_user
     task.assigned_assignment = resolved_assignment
     task.save(update_fields=["assigned_to", "assigned_assignment"])
-    _record(document, actor, AuditEvent.Action.REASSIGNED, version=document.current_version,
-            context={"task_id": task.pk, "from_user_id": previous_user.pk,
+    _record(document, actor, AuditEvent.Action.REASSIGNED, version=task.submitted_version,
+            context={"task_id": task.pk, "workflow_id": task.instance_id,
+                     "from_user_id": previous_user.pk,
                      "to_user_id": resolved_user.pk, "reason": reason.strip()})
     return task

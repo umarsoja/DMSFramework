@@ -18,6 +18,7 @@ from apps.documents.models import (
     Document,
     DocumentAccess,
     DocumentType,
+    DocumentVersion,
     WorkflowDecision,
     WorkflowTask,
 )
@@ -120,7 +121,11 @@ class InternalMemoLifecycleTests(TestCase):
         document = self.submit(self.make_draft())
         task = WorkflowTask.objects.get(instance__document=document)
         self.assertEqual(document.status, Document.Status.UNDER_REVIEW)
+        self.assertEqual(task.submitted_version, document.current_version)
         self.assertEqual(task.assigned_to, self.reviewer)
+        submitted_event = document.audit_events.get(action=AuditEvent.Action.SUBMITTED)
+        self.assertEqual(submitted_event.version, task.submitted_version)
+        self.assertEqual(submitted_event.context["workflow_id"], task.instance_id)
         self.assertTrue(can_view_document(self.reviewer, document))
         self.assertFalse(can_download_document(self.reviewer, document))
         self.client.force_login(self.reviewer)
@@ -131,10 +136,15 @@ class InternalMemoLifecycleTests(TestCase):
     def test_return_requires_reason_and_preserves_decision_before_resubmission(self):
         document = self.submit(self.make_draft())
         task = WorkflowTask.objects.get(instance__document=document)
+        first_version = task.submitted_version
         with self.assertRaises(ValidationError):
             decide_review(task_id=task.pk, actor=self.reviewer, outcome=WorkflowDecision.Outcome.RETURN)
         decision = decide_review(task_id=task.pk, actor=self.reviewer, outcome=WorkflowDecision.Outcome.RETURN,
                                  comment="Please add the maintenance date.")
+        self.assertEqual(decision.task.submitted_version, first_version)
+        self.assertEqual(decision.submitted_version, first_version)
+        returned_event = document.audit_events.get(action=AuditEvent.Action.RETURNED)
+        self.assertEqual(returned_event.version, first_version)
         document.refresh_from_db()
         self.assertEqual(document.status, Document.Status.RETURNED)
         save_memo(document=document, actor=self.owner, values=self.values("Updated maintenance plan"),
@@ -145,7 +155,75 @@ class InternalMemoLifecycleTests(TestCase):
         self.assertEqual(document.workflow.tasks.count(), 2)
         self.assertEqual(decision.comment, "Please add the maintenance date.")
         self.assertEqual(document.workflow.tasks.get(cycle=2).assigned_to, self.reviewer)
+        second_task = document.workflow.tasks.get(cycle=2)
+        self.assertEqual(second_task.submitted_version, document.current_version)
+        self.assertEqual(decision.task.submitted_version, first_version)
+        resubmitted_event = document.audit_events.get(action=AuditEvent.Action.RESUBMITTED)
+        self.assertEqual(resubmitted_event.version, second_task.submitted_version)
         self.assertTrue(document.audit_events.filter(action=AuditEvent.Action.RESUBMITTED).exists())
+
+    def test_approval_and_finalization_remain_bound_when_current_version_changes(self):
+        document = self.submit(self.make_draft())
+        task = WorkflowTask.objects.get(instance__document=document)
+        submitted_version = task.submitted_version
+        later_version = DocumentVersion.objects.create(
+            document=document,
+            number=submitted_version.number + 1,
+            content={**submitted_version.content, "subject": "Later, unsubmitted version"},
+            created_by=self.owner,
+        )
+        document.current_version_number = later_version.number
+        document.save(update_fields=["current_version_number"])
+
+        decision = decide_review(task_id=task.pk, actor=self.reviewer, outcome=WorkflowDecision.Outcome.APPROVE)
+        self.assertEqual(decision.task.submitted_version, submitted_version)
+        self.assertEqual(decision.submitted_version, submitted_version)
+        approved_event = document.audit_events.get(action=AuditEvent.Action.APPROVED)
+        self.assertEqual(approved_event.version, submitted_version)
+
+        finalize_document(document=document, actor=self.owner)
+        finalized_event = document.audit_events.get(action=AuditEvent.Action.FINALIZED)
+        self.assertEqual(finalized_event.version, submitted_version)
+        self.assertEqual(document.current_version_number, later_version.number)
+
+    def test_workflow_task_rejects_missing_or_cross_document_version_binding(self):
+        document = self.submit(self.make_draft())
+        other_document = self.make_draft()
+        task = document.workflow.tasks.get()
+        step = task.step
+
+        with self.assertRaisesMessage(ValidationError, "A new workflow task must identify its submitted document version."):
+            WorkflowTask.objects.create(
+                instance=task.instance, step=step, assigned_to=self.reviewer, cycle=task.cycle + 1,
+            )
+        with self.assertRaises(ValidationError):
+            WorkflowTask.objects.create(
+                instance=task.instance,
+                submitted_version=other_document.current_version,
+                step=step,
+                assigned_to=self.reviewer,
+                cycle=task.cycle + 1,
+            )
+
+        task.submitted_version = other_document.current_version
+        with self.assertRaisesMessage(ValidationError, "A workflow task's submitted document version cannot be changed."):
+            task.save(update_fields=["submitted_version"])
+
+    def test_unbound_historical_task_cannot_decide_using_current_version(self):
+        document = self.submit(self.make_draft())
+        task = document.workflow.tasks.get()
+        WorkflowTask.objects.filter(pk=task.pk).update(submitted_version=None)
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "This workflow task has no safely identified submitted version and cannot be decided.",
+        ):
+            decide_review(task_id=task.pk, actor=self.reviewer, outcome=WorkflowDecision.Outcome.APPROVE)
+
+        task.refresh_from_db()
+        document.refresh_from_db()
+        self.assertEqual(task.status, WorkflowTask.Status.PENDING)
+        self.assertEqual(document.status, Document.Status.UNDER_REVIEW)
 
     def test_approve_finalize_archive_and_pdf_lifecycle(self):
         document = self.submit(self.make_draft())
