@@ -269,9 +269,11 @@ class InternalMemoLifecycleTests(TestCase):
 
     def test_access_is_object_scoped_and_view_does_not_imply_download(self):
         document = self.submit(self.make_draft())
+        self.approve_and_finalize(document)
         self.assertFalse(can_view_document(self.outsider, document))
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(reverse("documents:memo-detail", args=[document.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("documents:memo-pdf-view", args=[document.pk])).status_code, 404)
 
         DocumentAccess.objects.create(document=document, user=self.viewer, can_view=True,
                                       can_download=False, granted_by=self.owner)
@@ -280,6 +282,156 @@ class InternalMemoLifecycleTests(TestCase):
         self.client.force_login(self.viewer)
         self.assertEqual(self.client.get(reverse("documents:memo-detail", args=[document.pk])).status_code, 200)
         self.assertEqual(self.client.get(reverse("documents:memo-pdf-download", args=[document.pk])).status_code, 403)
+
+    def test_internal_recipients_can_view_but_recipient_status_grants_no_actions(self):
+        document = create_memo(owner=self.owner, values=self.memo_values_with_recipients())
+
+        for recipient in (self.reviewer, self.department_head, self.outsider):
+            with self.subTest(recipient=recipient.username):
+                self.assertTrue(can_view_document(recipient, document))
+                self.client.force_login(recipient)
+                listing = self.client.get(reverse("documents:memo-list"))
+                self.assertContains(listing, document.reference)
+                self.assertEqual(
+                    self.client.get(reverse("documents:memo-detail", args=[document.pk])).status_code,
+                    200,
+                )
+                self.assertFalse(can_download_document(recipient, document))
+                self.assertEqual(
+                    self.client.get(reverse("documents:memo-edit", args=[document.pk])).status_code,
+                    403,
+                )
+                self.assertEqual(
+                    self.client.post(reverse("documents:memo-review", args=[document.pk]),
+                                     {"decision": "APPROVE"}).status_code,
+                    403,
+                )
+                self.assertEqual(
+                    self.client.post(reverse("documents:memo-finalize", args=[document.pk])).status_code,
+                    403,
+                )
+                self.assertEqual(
+                    self.client.post(reverse("documents:memo-archive", args=[document.pk])).status_code,
+                    403,
+                )
+
+    def test_confidential_recipients_can_view_without_organizational_membership_grants(self):
+        document = create_memo(
+            owner=self.owner,
+            values=self.memo_values_with_recipients(classification=Document.Classification.CONFIDENTIAL),
+        )
+
+        for recipient in (self.reviewer, self.department_head, self.outsider):
+            self.assertTrue(can_view_document(recipient, document))
+
+        self.assertFalse(can_view_document(self.viewer, document))
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(reverse("documents:memo-detail", args=[document.pk])).status_code, 200)
+        self.client.force_login(self.viewer)
+        self.assertEqual(self.client.get(reverse("documents:memo-detail", args=[document.pk])).status_code, 404)
+
+    def test_restricted_recipient_is_denied_until_explicitly_authorized(self):
+        uploaded = SimpleUploadedFile("restricted-support.pdf", b"%PDF-1.4 restricted", content_type="application/pdf")
+        document = create_memo(
+            owner=self.owner,
+            values=self.memo_values_with_recipients(classification=Document.Classification.RESTRICTED),
+            uploads=[uploaded],
+            reviewer=self.reviewer,
+        )
+        self.approve_and_finalize(document)
+        attachment = document.current_version.attachments.get()
+
+        self.assertFalse(can_view_document(self.outsider, document))
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(reverse("documents:memo-list")).status_code, 200)
+        self.assertNotContains(self.client.get(reverse("documents:memo-list")), document.reference)
+        self.assertEqual(self.client.get(reverse("documents:memo-detail", args=[document.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("documents:memo-pdf-view", args=[document.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("documents:attachment-view", args=[document.pk, attachment.pk])).status_code, 404)
+
+        DocumentAccess.objects.create(
+            document=document, user=self.outsider, can_view=True, can_download=False, granted_by=self.owner,
+        )
+        self.assertTrue(can_view_document(self.outsider, document))
+        self.assertFalse(can_download_document(self.outsider, document))
+        self.assertEqual(self.client.get(reverse("documents:memo-detail", args=[document.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("documents:memo-pdf-view", args=[document.pk])).status_code, 200)
+        attachment_response = self.client.get(reverse("documents:attachment-view", args=[document.pk, attachment.pk]))
+        self.assertEqual(attachment_response.status_code, 200)
+        self.assertEqual(b"".join(attachment_response.streaming_content), b"%PDF-1.4 restricted")
+        self.assertEqual(self.client.get(reverse("documents:memo-pdf-download", args=[document.pk])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("documents:attachment-download", args=[document.pk, attachment.pk])).status_code, 403)
+
+    def test_restricted_workflow_assignee_can_view_independently_of_recipients(self):
+        values = self.values(classification=Document.Classification.RESTRICTED)
+        document = create_memo(owner=self.owner, values=values, reviewer=self.reviewer)
+
+        self.assertFalse(can_view_document(self.outsider, document))
+        self.assertTrue(can_view_document(self.reviewer, document))
+        self.client.force_login(self.reviewer)
+        response = self.client.get(reverse("documents:memo-detail", args=[document.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Review this memo")
+
+    def test_recipient_identity_comes_from_current_or_exact_approved_version(self):
+        draft = create_memo(owner=self.owner, values=self.memo_values_with_recipients())
+        save_memo(
+            document=draft,
+            actor=self.owner,
+            values=self.values("Recipient removed from current version"),
+        )
+        self.assertFalse(can_view_document(self.outsider, draft))
+        self.assertTrue(can_view_document(self.owner, draft))
+
+        approved = create_memo(
+            owner=self.owner,
+            values=self.memo_values_with_recipients("Approved recipient snapshot"),
+            reviewer=self.reviewer,
+        )
+        self.approve_and_finalize(approved)
+        approved_version = approved.workflow.tasks.get(status=WorkflowTask.Status.APPROVED).submitted_version
+        later_version = DocumentVersion.objects.create(
+            document=approved,
+            number=approved.current_version_number + 1,
+            content={
+                "subject": "Unapproved version",
+                "classification": Document.Classification.INTERNAL,
+                "to_employee_ids": [self.viewer.employee_profile.pk],
+                "through_employee_ids": [],
+                "cc_employee_ids": [],
+            },
+            created_by=self.owner,
+        )
+        approved.current_version_number = later_version.number
+        approved.save(update_fields=["current_version_number"])
+
+        self.assertTrue(can_view_document(self.outsider, approved))
+        self.assertFalse(can_view_document(self.viewer, approved))
+        self.assertNotEqual(approved_version, later_version)
+
+    def test_recipient_view_policy_applies_to_final_pdf_and_attachment_routes(self):
+        uploaded = SimpleUploadedFile("internal-support.pdf", b"%PDF-1.4 internal", content_type="application/pdf")
+        document = create_memo(
+            owner=self.owner,
+            values=self.memo_values_with_recipients(),
+            uploads=[uploaded],
+            reviewer=self.reviewer,
+        )
+        self.approve_and_finalize(document)
+        attachment = document.workflow.tasks.get(status=WorkflowTask.Status.APPROVED).submitted_version.attachments.get()
+
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(reverse("documents:memo-detail", args=[document.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("documents:memo-pdf-view", args=[document.pk])).status_code, 200)
+        attachment_response = self.client.get(reverse("documents:attachment-view", args=[document.pk, attachment.pk]))
+        self.assertEqual(attachment_response.status_code, 200)
+        self.assertEqual(b"".join(attachment_response.streaming_content), b"%PDF-1.4 internal")
+        self.assertEqual(self.client.get(reverse("documents:memo-pdf-download", args=[document.pk])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("documents:attachment-download", args=[document.pk, attachment.pk])).status_code, 403)
+
+        self.client.force_login(self.viewer)
+        self.assertEqual(self.client.get(reverse("documents:memo-pdf-view", args=[document.pk])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("documents:attachment-view", args=[document.pk, attachment.pk])).status_code, 404)
 
     def test_assigned_reviewer_cannot_decide_for_someone_elses_task(self):
         document = self.submit(self.make_draft())
