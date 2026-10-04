@@ -1,0 +1,39 @@
+<button class="dms-sidebar-backdrop" type="button" data-dms-sidebar-close aria-label="Close workspace navigation"></button>
+<aside class="dms-sidebar" id="dms-sidebar" aria-label="APGC DMS navigation">
+  <div class="dms-sidebar-heading">
+    <span class="dms-sidebar-eyebrow">WORKSPACE</span>
+    <button class="dms-icon-button dms-collapse-toggle" type="button" data-dms-sidebar-toggle aria-controls="dms-sidebar" aria-expanded="true" aria-label="Collapse workspace navigation">
+      <span aria-hidden="true">‹</span>
+    </button>
+  </div>
+  <nav aria-label="Workspace navigation">
+    <ul class="dms-nav-list">
+      <li class="dms-nav-heading">Documents</li>
+      <li><a class="dms-nav-link{% if request.resolver_match.namespace == 'documents' and request.GET.status != 'DRAFT' and request.GET.status != 'UNDER_REVIEW' and request.GET.status != 'ARCHIVED' %} active{% endif %}" href="{% url 'documents:memo-list' %}"{% if request.resolver_match.namespace == 'documents' and request.GET.status != 'DRAFT' and request.GET.status != 'UNDER_REVIEW' and request.GET.status != 'ARCHIVED' %} aria-current="page"{% endif %} aria-label="Internal memos">
+        <span class="dms-nav-icon">{% include 'components/icon.html' with name='file-description' only %}</span><span class="dms-nav-label">Internal Memos</span>
+      </a></li>
+      {% if request.user.is_authenticated and can_create_memo %}<li><a class="dms-nav-link{% if request.resolver_match.url_name == 'memo-create' %} active{% endif %}" href="{% url 'documents:memo-create' %}"{% if request.resolver_match.url_name == 'memo-create' %} aria-current="page"{% endif %} aria-label="New internal memo">
+        <span class="dms-nav-icon">{% include 'components/icon.html' with name='file-certificate' only %}</span><span class="dms-nav-label">New Internal Memo</span>
+      </a></li>{% endif %}
+      <li><a class="dms-nav-link{% if request.resolver_match.url_name == 'memo-list' and request.GET.status == 'DRAFT' %} active{% endif %}" href="{% url 'documents:memo-list' %}?status=DRAFT"{% if request.resolver_match.url_name == 'memo-list' and request.GET.status == 'DRAFT' %} aria-current="page"{% endif %} aria-label="Draft memos">
+        <span class="dms-nav-icon">{% include 'components/icon.html' with name='receipt' only %}</span><span class="dms-nav-label">Drafts</span>
+      </a></li>
+      <li><a class="dms-nav-link{% if request.resolver_match.url_name == 'memo-list' and request.GET.status == 'UNDER_REVIEW' %} active{% endif %}" href="{% url 'documents:memo-list' %}?status=UNDER_REVIEW"{% if request.resolver_match.url_name == 'memo-list' and request.GET.status == 'UNDER_REVIEW' %} aria-current="page"{% endif %} aria-label="Memos under review">
+        <span class="dms-nav-icon">{% include 'components/icon.html' with name='clipboard-check' only %}</span><span class="dms-nav-label">Under Review</span>
+      </a></li>
+      <li><a class="dms-nav-link{% if request.resolver_match.url_name == 'memo-list' and request.GET.status == 'ARCHIVED' %} active{% endif %}" href="{% url 'documents:memo-list' %}?status=ARCHIVED"{% if request.resolver_match.url_name == 'memo-list' and request.GET.status == 'ARCHIVED' %} aria-current="page"{% endif %} aria-label="Archived memos">
+        <span class="dms-nav-icon">{% include 'components/icon.html' with name='building-bank' only %}</span><span class="dms-nav-label">Archived</span>
+      </a></li>
+
+      {% if perms.organization.manage_employees or perms.organization.manage_departments or perms.organization.manage_positions or perms.organization.manage_roles %}
+      <li class="dms-nav-heading">Organisation</li>
+      {% if perms.organization.manage_employees %}<li><a class="dms-nav-link{% if request.resolver_match.url_name|slice:':9' == 'employee-' %} active{% endif %}" href="{% url 'organization:employee-list' %}" aria-label="Employees"><span class="dms-nav-icon">{% include 'components/icon.html' with name='users' only %}</span><span class="dms-nav-label">Employees</span></a></li>
+      <li><a class="dms-nav-link{% if request.resolver_match.url_name == 'structure' %} active{% endif %}" href="{% url 'organization:structure' %}" aria-label="Organisation structure"><span class="dms-nav-icon">{% include 'components/icon.html' with name='chart-bar' only %}</span><span class="dms-nav-label">Structure</span></a></li>{% endif %}
+      {% if perms.organization.manage_departments %}<li><a class="dms-nav-link{% if request.resolver_match.url_name|slice:':11' == 'department-' %} active{% endif %}" href="{% url 'organization:department-list' %}" aria-label="Departments"><span class="dms-nav-icon">{% include 'components/icon.html' with name='building' only %}</span><span class="dms-nav-label">Departments</span></a></li>{% endif %}
+      {% if perms.organization.manage_positions %}<li><a class="dms-nav-link{% if request.resolver_match.url_name|slice:':9' == 'position-' %} active{% endif %}" href="{% url 'organization:position-list' %}" aria-label="Positions"><span class="dms-nav-icon">{% include 'components/icon.html' with name='briefcase' only %}</span><span class="dms-nav-label">Positions</span></a></li>{% endif %}
+      {% if perms.organization.manage_roles %}<li><a class="dms-nav-link{% if request.resolver_match.url_name == 'roles' %} active{% endif %}" href="{% url 'organization:roles' %}" aria-label="Roles and permissions"><span class="dms-nav-icon">{% include 'components/icon.html' with name='shield-check' only %}</span><span class="dms-nav-label">Roles &amp; Permissions</span></a></li>{% endif %}
+      {% endif %}
+    </ul>
+  </nav>
+  <div class="dms-sidebar-bottom"><span class="dms-sidebar-mark" aria-hidden="true">APGC</span><span class="dms-nav-label">Secure document workspace</span></div>
+</aside>

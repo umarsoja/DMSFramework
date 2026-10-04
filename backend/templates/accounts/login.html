@@ -1,0 +1,27 @@
+{% extends 'layouts/authentication.html' %}
+{% block title %}Sign in | APGC Digital Portal{% endblock %}
+{% block content %}
+<section class="apgc-auth-card" aria-labelledby="page-title">
+    <div class="apgc-auth-brand">
+      {% include 'partials/brand.html' %}
+      <div><h1 id="page-title">APGC Digital Portal</h1><p>Sign in with your APGC employee account.</p></div>
+    </div>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="apgc-auth-field{% if form.username.errors %} has-error{% endif %}">
+          <label class="form-label" for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
+          <input class="form-control" type="text" name="{{ form.username.html_name }}" id="{{ form.username.id_for_label }}" value="{{ form.username.value|default:'' }}" autocomplete="username" required autofocus>
+          {% for error in form.username.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="apgc-auth-field{% if form.password.errors %} has-error{% endif %}" x-data="{ visible: false }">
+          <label class="form-label" for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
+          <div class="apgc-auth-password"><input class="form-control" :type="visible ? 'text' : 'password'" type="password" name="{{ form.password.html_name }}" id="{{ form.password.id_for_label }}" autocomplete="current-password" required><button class="apgc-auth-password-toggle" type="button" @click="visible = !visible" :aria-pressed="visible" x-text="visible ? 'Hide' : 'Show'">Show</button></div>
+          {% for error in form.password.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+        {% if next %}<input type="hidden" name="{{ redirect_field_name }}" value="{{ next }}">{% endif %}
+        <button class="btn btn-primary apgc-auth-submit w-100" type="submit">Sign in</button>
+    </form>
+    <div class="apgc-auth-links"><a href="{% url 'home' %}">Back to APGC website</a><span>Secure employee access</span></div>
+</section>
+{% endblock %}

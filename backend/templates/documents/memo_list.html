@@ -1,10 +1,10 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/dms_authenticated.html' %}
 {% block title %}Internal memos | APGC DMS{% endblock %}
 {% block content %}
 <section class="container-xl dms-page" aria-labelledby="page-title">
   <div class="dms-page-header">
     <div><p class="eyebrow text-brand">DOCUMENT WORKSPACE</p><h1 id="page-title">Internal memos</h1><p class="text-secondary">Create drafts, follow reviews, and find memos you are permitted to access.</p></div>
-    <a class="btn btn-primary" href="{% url 'documents:memo-create' %}">Create memo <span aria-hidden="true">＋</span></a>
+    {% if can_create_memo %}<a class="btn btn-primary" href="{% url 'documents:memo-create' %}">Create memo <span aria-hidden="true">＋</span></a>{% endif %}
   </div>
 
   <form class="card memo-filter" method="get" role="search" aria-label="Search internal memos">
@@ -38,7 +38,7 @@
     {% if page.has_next %}<li class="page-item"><a class="page-link" href="?q={{ query|urlencode }}&amp;status={{ status_filter|urlencode }}&amp;page={{ page.next_page_number }}" aria-label="Next page">Next</a></li>{% endif %}
   </ul></nav>{% endif %}
   {% else %}
-  <div class="empty-state"><span class="empty-state-icon" aria-hidden="true">▤</span><h2>{% if query or status_filter %}No matching memos{% else %}No memos yet{% endif %}</h2><p>{% if query or status_filter %}Try another search or status filter.{% else %}Start a memo draft when you are ready.{% endif %}</p>{% if not query and not status_filter %}<a class="btn btn-primary" href="{% url 'documents:memo-create' %}">Create the first memo</a>{% endif %}</div>
+  <div class="empty-state"><span class="empty-state-icon" aria-hidden="true">▤</span><h2>{% if query or status_filter %}No matching memos{% else %}No memos yet{% endif %}</h2><p>{% if query or status_filter %}Try another search or status filter.{% else %}Start a memo draft when you are ready.{% endif %}</p>{% if not query and not status_filter and can_create_memo %}<a class="btn btn-primary" href="{% url 'documents:memo-create' %}">Create the first memo</a>{% endif %}</div>
   {% endif %}
 </section>
 {% endblock %}

@@ -1,0 +1,10 @@
+<dialog class="action-confirmation" x-ref="confirmationDialog" aria-labelledby="{{ dialog_id }}-title" aria-describedby="{{ dialog_id }}-message">
+  <div class="action-confirmation-content">
+    <h2 id="{{ dialog_id }}-title" class="h3"><span {% if dialog_dynamic_decision %}x-text="submitterValue === 'APPROVE' ? 'Approve this document?' : 'Return this document to the creator?'"{% endif %}>{{ dialog_title }}</span></h2>
+    <p id="{{ dialog_id }}-message"><span {% if dialog_dynamic_decision %}x-text="submitterValue === 'APPROVE' ? 'This will record your decision against the submitted version.' : 'The document will require further action before it can proceed.'"{% endif %}>{{ dialog_message }}</span></p>
+    <div class="action-confirmation-buttons">
+      <button class="btn btn-outline-primary" type="button" autofocus @click="$refs.confirmationDialog.close()">Cancel</button>
+      <button class="btn btn-primary" type="button" {% if dialog_dynamic_decision %}x-text="submitterValue === 'APPROVE' ? 'Approve document' : 'Return for revision'"{% endif %} @click="confirmed = true; const action = [...$refs.actionForm.querySelectorAll('button[type=submit],input[type=submit]')].find(button => button.name === submitterName && button.value === submitterValue); if (action) { $refs.actionForm.requestSubmit(action); } else { $refs.actionForm.requestSubmit(); }">{{ confirm_label }}</button>
+    </div>
+  </div>
+</dialog>

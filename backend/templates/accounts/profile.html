@@ -1,0 +1,21 @@
+{% extends 'layouts/dms_authenticated.html' %}
+{% block title %}My profile | APGC DMS{% endblock %}
+{% block content %}
+<section class="container-xl dms-page" aria-labelledby="page-title">
+  <header class="dms-page-header dms-page-header-compact"><div><p class="eyebrow text-brand">ACCOUNT</p><h1 id="page-title">My profile</h1><p class="text-secondary">Your employee and organisational information from APGC records.</p></div></header>
+  <div class="row g-4">
+    <div class="col-12 col-xl-7"><section class="card"><div class="card-header"><h2 class="card-title">Employee information</h2></div><div class="card-body"><dl class="document-metadata">
+      <div><dt>Name</dt><dd>{{ request.user.get_full_name|default:request.user.get_username }}</dd></div>
+      <div><dt>Username</dt><dd>{{ request.user.get_username }}</dd></div>
+      <div><dt>Email</dt><dd>{{ request.user.email|default:'—' }}</dd></div>
+      <div><dt>Staff ID</dt><dd>{{ profile.staff_id }}</dd></div>
+      <div><dt>Employment status</dt><dd>{{ profile.get_employment_status_display }}</dd></div>
+      <div><dt>Account status</dt><dd>{{ profile.get_account_status_display }}</dd></div>
+      <div><dt>Department</dt><dd>{% if assignment %}{{ assignment.department.name }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Position</dt><dd>{% if assignment %}{{ assignment.position.title }}{% else %}—{% endif %}</dd></div>
+      <div><dt>Supervisor</dt><dd>{% if assignment.supervisor %}{{ assignment.supervisor.user.get_full_name|default:assignment.supervisor.user.get_username }}{% else %}—{% endif %}</dd></div>
+    </dl></div></section></div>
+    <div class="col-12 col-xl-5"><section class="card"><div class="card-header"><h2 class="card-title">DMS access</h2></div><div class="card-body"><p class="text-secondary">Your current DMS roles are assigned by authorised administrators.</p><ul class="list-unstyled mb-0">{% for group in dms_roles %}<li class="mb-2"><span class="badge status-neutral">{{ group.name }}</span></li>{% empty %}<li class="text-secondary">No DMS role is assigned.</li>{% endfor %}</ul></div></section></div>
+  </div>
+</section>
+{% endblock %}

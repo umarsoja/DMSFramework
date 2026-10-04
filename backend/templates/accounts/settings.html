@@ -1,0 +1,11 @@
+{% extends 'layouts/dms_authenticated.html' %}
+{% block title %}Account settings | APGC DMS{% endblock %}
+{% block content %}
+<section class="container-xl dms-page" aria-labelledby="page-title">
+  <header class="dms-page-header dms-page-header-compact"><div><p class="eyebrow text-brand">ACCOUNT</p><h1 id="page-title">Settings</h1><p class="text-secondary">Manage the account security options currently available in APGC DMS.</p></div></header>
+  <div class="row g-4">
+    <div class="col-12 col-lg-7"><section class="card"><div class="card-header"><h2 class="card-title">Security</h2></div><div class="card-body d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3"><div><h3 class="h4 mb-1">Password</h3><p class="text-secondary mb-0">Change your sign-in password. Django’s configured password checks apply.</p></div><a class="btn btn-outline-primary" href="{% url 'account-password-change' %}">Change password</a></div></section></div>
+    <div class="col-12 col-lg-5"><section class="card"><div class="card-header"><h2 class="card-title">Account information</h2></div><div class="card-body"><dl class="document-metadata"><div><dt>Username</dt><dd>{{ request.user.get_username }}</dd></div><div><dt>Account status</dt><dd>{{ profile.get_account_status_display }}</dd></div><div><dt>Last sign in</dt><dd>{% if request.user.last_login %}<time datetime="{{ request.user.last_login|date:'c' }}">{{ request.user.last_login|date:'d M Y, H:i' }}</time>{% else %}No previous sign in recorded{% endif %}</dd></div></dl><p class="small text-secondary mb-0">Employee status and DMS roles are maintained through the organisation administration process.</p></div></section></div>
+  </div>
+</section>
+{% endblock %}

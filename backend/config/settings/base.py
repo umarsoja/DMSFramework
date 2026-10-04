@@ -227,11 +227,11 @@ TRADEFLOW = {
 }
 
 #Login URLs
-LOGIN_URL = "admin:login"
+LOGIN_URL = "dms-login"
 
-LOGIN_REDIRECT_URL = "home"
+LOGIN_REDIRECT_URL = "documents:memo-list"
 
-LOGOUT_REDIRECT_URL = "admin:login"
+LOGOUT_REDIRECT_URL = "dms-login"
 
 #CRSF
 CSRF_TRUSTED_ORIGINS = env.list(

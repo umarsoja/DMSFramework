@@ -10,10 +10,10 @@
           <a class="nav-link" href="{% url 'documents:memo-list' %}">My workspace</a>
           {% if perms.organization.manage_employees %}<a class="nav-link" href="{% url 'organization:employee-list' %}">Organisation</a>{% endif %}
           <span class="nav-link" aria-label="Signed in as {{ request.user.get_username }}">{{ request.user.get_full_name|default:request.user.get_username }}</span>
-          <form action="{% url 'admin:logout' %}" method="post" class="d-inline-flex">{% csrf_token %}<button class="btn btn-outline-primary" type="submit">Sign out</button></form>
+          <form action="{% url 'dms-logout' %}" method="post" class="d-inline-flex" x-data="{ confirmed: false, submitterName: '', submitterValue: '' }" x-ref="actionForm" @submit="if (!confirmed) { $event.preventDefault(); $refs.confirmationDialog.showModal(); }">{% csrf_token %}<button class="btn btn-outline-primary" type="submit">Sign out</button>{% include 'components/action_confirmation_dialog.html' with dialog_id='public-logout-confirm' dialog_title='Sign out of APGC DMS?' dialog_message='You will end this DMS session and return to the sign-in page.' confirm_label='Sign out' only %}</form>
         {% else %}
           <a class="nav-link" href="{% url 'home' %}#capabilities">Capabilities</a>
-          <a class="btn btn-primary" href="{% url 'admin:login' %}">Sign in <span aria-hidden="true">↗</span></a>
+          <a class="btn btn-primary" href="{% url 'dms-login' %}">Sign in <span aria-hidden="true">↗</span></a>
         {% endif %}
       </div>
     </nav>

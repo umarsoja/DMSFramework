@@ -9,6 +9,7 @@ from django.http import FileResponse, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
+from apps.organization.authentication import is_dms_viewer
 
 from .access import can_download_document, can_edit_document, pending_review_task, visible_documents
 from .forms import MemoForm
@@ -29,6 +30,7 @@ def _workspace_context(request, page_title, breadcrumbs):
     return {
         "page_title": page_title,
         "breadcrumbs": breadcrumbs,
+        "can_create_memo": not is_dms_viewer(request.user),
         "sidebar_items": [
             {"label": "Internal memos", "url": reverse("documents:memo-list"), "active": True},
             {"label": "Create memo", "url": reverse("documents:memo-create"), "active": False},

@@ -1,0 +1,8 @@
+[x-cloak] { display: none !important; }
+html:has(.action-confirmation[open]) { scrollbar-gutter: stable; }
+.action-confirmation { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(92vw, 34rem); max-width: none; max-height: min(90vh, 48rem); overflow-y: auto; margin: 0; padding: 0; border: 1px solid #cfd7e3; border-radius: .75rem; box-shadow: 0 1.5rem 4rem #14213d40; }
+.action-confirmation::backdrop { position: fixed; inset: 0; background: #17203380; }
+.action-confirmation-content { padding: 1.5rem; }
+.action-confirmation-content h2 { margin-bottom: .75rem; }
+.action-confirmation-content p { margin-bottom: 1.5rem; }
+.action-confirmation-buttons { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; }

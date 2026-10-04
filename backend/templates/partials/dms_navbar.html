@@ -1,0 +1,48 @@
+<header class="dms-topbar">
+  <div class="dms-topbar-brand">
+    <button class="dms-icon-button dms-nav-toggle" type="button" data-dms-sidebar-toggle aria-controls="dms-sidebar" aria-expanded="false" aria-label="Open workspace navigation">
+      <span aria-hidden="true">☰</span>
+    </button>
+    <a class="dms-brand" href="{% url 'documents:memo-list' %}" aria-label="APGC DMS workspace">
+      {% include 'partials/brand.html' %}
+      <span class="dms-brand-divider" aria-hidden="true"></span>
+      <span class="dms-brand-product">Document Management System</span>
+    </a>
+  </div>
+
+  <div class="dms-topbar-actions">
+    <details class="dms-menu dms-notifications">
+      <summary class="dms-icon-button" aria-label="Notifications; none available">
+        <span aria-hidden="true">◉</span><span class="visually-hidden">Notifications</span>
+      </summary>
+      <section class="dms-menu-panel dms-notification-panel" aria-label="Notifications">
+        <h2>Notifications</h2>
+        <p>No notifications are available.</p>
+      </section>
+    </details>
+
+    <details class="dms-menu dms-user-menu">
+      <summary class="dms-user-trigger" aria-label="Account menu for {{ request.user.get_full_name|default:request.user.get_username }}">
+        <span class="dms-avatar" aria-hidden="true">{% if request.user.first_name or request.user.last_name %}{{ request.user.first_name|first|upper }}{{ request.user.last_name|first|upper }}{% else %}{{ request.user.get_username|first|upper }}{% endif %}</span>
+        <span class="dms-user-name">{{ request.user.get_full_name|default:request.user.get_username }}</span>
+        <span aria-hidden="true">⌄</span>
+      </summary>
+      <div class="dms-menu-panel dms-account-panel">
+        <div class="dms-account-identity">
+          <span class="dms-avatar dms-avatar-large" aria-hidden="true">{% if request.user.first_name or request.user.last_name %}{{ request.user.first_name|first|upper }}{{ request.user.last_name|first|upper }}{% else %}{{ request.user.get_username|first|upper }}{% endif %}</span>
+          <span><strong>{{ request.user.get_full_name|default:request.user.get_username }}</strong><small>APGC DMS account</small></span>
+        </div>
+        <nav class="dms-account-links" aria-label="Account options">
+          <a href="{% url 'account-profile' %}">Profile</a>
+          <a href="{% url 'account-settings' %}">Settings</a>
+          <a href="{% url 'account-password-change' %}">Change password</a>
+        </nav>
+        <form action="{% url 'dms-logout' %}" method="post" class="dms-logout-form" x-data="{ confirmed: false, submitterName: '', submitterValue: '' }" x-ref="actionForm" @submit="if (!confirmed) { $event.preventDefault(); $refs.confirmationDialog.showModal(); }">
+          {% csrf_token %}
+          <button class="dms-menu-action" type="submit">Sign out</button>
+          {% include 'components/action_confirmation_dialog.html' with dialog_id='dms-logout-confirm' dialog_title='Sign out of APGC DMS?' dialog_message='You will end this DMS session and return to the sign-in page.' confirm_label='Sign out' only %}
+        </form>
+      </div>
+    </details>
+  </div>
+</header>

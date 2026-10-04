@@ -1,0 +1,19 @@
+.apgc-auth { min-height: 100vh; display: flex; flex-direction: column; color: var(--apgc-text); background: radial-gradient(ellipse at 8% 8%, #e5f5fc 0, transparent 38%), linear-gradient(145deg, #f7f9fc, #eef1f8); }
+.apgc-auth-main { display: grid; flex: 1 0 auto; place-items: center; padding: clamp(1.5rem, 5vw, 4rem) 1rem; }
+.apgc-auth-card { width: min(100%, 440px); padding: clamp(1.5rem, 4vw, 2.5rem); background: #fff; border: 1px solid var(--apgc-border); border-radius: 1.15rem; box-shadow: 0 18px 50px rgb(32 36 51 / 9%); }
+.apgc-auth-brand { display: grid; justify-items: center; gap: 1.25rem; margin-bottom: 1.75rem; text-align: center; }
+.apgc-auth-brand .apgc-logo { width: min(100%, 250px); max-height: 60px; }
+.apgc-auth-brand h1 { margin: 0; color: var(--apgc-text); font-size: clamp(1.4rem, 4vw, 1.75rem); font-weight: 750; letter-spacing: -.025em; }
+.apgc-auth-brand p { margin: .45rem 0 0; color: var(--apgc-muted); font-size: .92rem; line-height: 1.55; }
+.apgc-auth-field { margin-bottom: 1.1rem; }
+.apgc-auth-field label { margin-bottom: .4rem; font-size: .86rem; font-weight: 650; }
+.apgc-auth-field .form-control { min-height: 46px; border-color: #d9deea; border-radius: .6rem; }
+.apgc-auth-field .form-control:focus { border-color: var(--apgc-primary); box-shadow: 0 0 0 .2rem rgb(59 62 124 / 13%); }
+.apgc-auth-password { position: relative; }
+.apgc-auth-password .form-control { padding-right: 4.8rem; }
+.apgc-auth-password-toggle { position: absolute; top: 50%; right: .65rem; transform: translateY(-50%); padding: .35rem; color: var(--apgc-primary); background: transparent; border: 0; font-size: .78rem; font-weight: 650; }
+.apgc-auth-submit { min-height: 46px; margin-top: .5rem; border-radius: .6rem; font-weight: 700; }
+.apgc-auth-footer { flex: 0 0 auto; padding: 1rem; color: var(--apgc-muted); font-size: .75rem; text-align: center; }
+.apgc-auth-links { display: flex; justify-content: space-between; gap: .75rem; margin-top: 1rem; font-size: .84rem; }
+.apgc-auth-card .alert { margin-bottom: 1rem; }
+@media (max-width: 420px) { .apgc-auth-links { flex-direction: column; } }
