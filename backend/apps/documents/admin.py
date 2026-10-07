@@ -13,6 +13,7 @@ from .models import (
     WorkflowStep,
     WorkflowTask,
     WorkflowTaskReassignment,
+    RelatedDocument,
 )
 
 
@@ -64,6 +65,23 @@ class DocumentAccessAdmin(admin.ModelAdmin):
     list_filter = ("can_view", "can_download")
     search_fields = ("document__reference", "document__title", "user__username")
     readonly_fields = ("granted_at",)
+
+
+@admin.register(RelatedDocument)
+class RelatedDocumentAdmin(admin.ModelAdmin):
+    list_display = ("source_document", "relationship_type", "target_document", "created_by", "created_at", "is_active")
+    list_filter = ("relationship_type", "is_active", "created_at")
+    search_fields = ("source_document__reference", "source_document__title", "target_document__reference", "target_document__title")
+    readonly_fields = tuple(field.name for field in RelatedDocument._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(DocumentVersion)

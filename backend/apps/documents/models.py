@@ -152,6 +152,51 @@ class DocumentNumberSequence(models.Model):
         return f"{self.office_code}/{self.year}: {self.last_sequence}"
 
 
+class RelatedDocument(models.Model):
+    class RelationshipType(models.TextChoices):
+        RESPONSE_TO = "RESPONSE_TO", "Response to"
+        REVISION_OF = "REVISION_OF", "Revision of"
+        SUPPORTS = "SUPPORTS", "Supports"
+        REFERENCES = "REFERENCES", "References"
+        RELATED_TO = "RELATED_TO", "Related to"
+
+    source_document = models.ForeignKey(
+        Document, on_delete=models.PROTECT, related_name="outgoing_relationships",
+    )
+    target_document = models.ForeignKey(
+        Document, on_delete=models.PROTECT, related_name="incoming_relationships",
+    )
+    relationship_type = models.CharField(max_length=20, choices=RelationshipType.choices)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_document_relationships",
+    )
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_document", "target_document", "relationship_type"],
+                name="uniq_related_document_typed_pair",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(source_document=models.F("target_document")),
+                name="related_document_not_self_referential",
+            ),
+        ]
+        indexes = [models.Index(fields=["source_document", "is_active"])]
+
+    def clean(self):
+        if self.source_document_id and self.source_document_id == self.target_document_id:
+            raise ValidationError({"target_document": "A document cannot be related to itself."})
+        if self.relationship_type not in self.RelationshipType.values:
+            raise ValidationError({"relationship_type": "Choose a supported relationship type."})
+
+    def __str__(self):
+        return f"{self.source_document} {self.get_relationship_type_display()} {self.target_document}"
+
+
 def private_attachment_path(instance, filename):
     extension = Path(filename).suffix.lower()[:12]
     return f"private_documents/{instance.version.document_id}/{instance.version.number}/{uuid4().hex}{extension}"
@@ -343,6 +388,8 @@ class AuditEvent(models.Model):
         ATTACHMENT_VIEWED = "ATTACHMENT_VIEWED", "Attachment viewed"
         REASSIGNED = "REASSIGNED", "Workflow task reassigned"
         TASK_COMPLETED = "TASK_COMPLETED", "Workflow task completed"
+        RELATED_DOCUMENT_ADDED = "RELATED_DOCUMENT_ADDED", "Related document added"
+        RELATED_DOCUMENT_REMOVED = "RELATED_DOCUMENT_REMOVED", "Related document removed"
 
     document = models.ForeignKey(Document, on_delete=models.PROTECT, related_name="audit_events")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="dms_audit_events")
@@ -350,7 +397,7 @@ class AuditEvent(models.Model):
         "organization.EmployeeAssignment", null=True, blank=True, on_delete=models.PROTECT,
         related_name="document_audit_events",
     )
-    action = models.CharField(max_length=24, choices=Action.choices)
+    action = models.CharField(max_length=32, choices=Action.choices)
     version = models.ForeignKey(DocumentVersion, null=True, blank=True, on_delete=models.PROTECT, related_name="audit_events")
     context = models.JSONField(default=dict, blank=True)
     occurred_at = models.DateTimeField(default=timezone.now, editable=False)

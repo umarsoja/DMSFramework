@@ -17,6 +17,7 @@ from .models import (
     WorkflowDefinition,
     WorkflowActionType,
     WorkflowInstance,
+    RelatedDocument,
     WorkflowTask,
 )
 from .numbering import allocate_document_reference
@@ -271,6 +272,78 @@ def record_access(*, document, actor, action, context=None, version=None):
     if version is None:
         version = document.current_version
     return _record(document, actor, action, version=version, context=context)
+
+
+@transaction.atomic
+def create_related_document(*, source_document, target_document, relationship_type, actor):
+    from .access import can_view_document
+
+    source = Document.objects.select_for_update().get(pk=source_document.pk)
+    target = Document.objects.get(pk=target_document.pk)
+    if not can_view_document(actor, source):
+        raise PermissionDenied("You are not authorized to access the source document.")
+    if not can_view_document(actor, target):
+        raise PermissionDenied("You are not authorized to access the target document.")
+    if source.pk == target.pk:
+        raise ValidationError({"target_document": "A document cannot be related to itself."})
+    if relationship_type not in RelatedDocument.RelationshipType.values:
+        raise ValidationError({"relationship_type": "Choose a supported relationship type."})
+
+    relationship, created = RelatedDocument.objects.get_or_create(
+        source_document=source,
+        target_document=target,
+        relationship_type=relationship_type,
+        defaults={"created_by": actor},
+    )
+    if not created:
+        if not relationship.is_active:
+            relationship.is_active = True
+            relationship.save(update_fields=["is_active"])
+            action = AuditEvent.Action.RELATED_DOCUMENT_ADDED
+        else:
+            raise ValidationError("This document relationship already exists.")
+    else:
+        action = AuditEvent.Action.RELATED_DOCUMENT_ADDED
+    _record(source, actor, action, context={
+        "relationship_id": relationship.pk,
+        "target_document_id": target.pk,
+        "relationship_type": relationship.relationship_type,
+    })
+    return relationship
+
+
+def related_documents(*, document, user):
+    from .access import visible_documents
+
+    visible = visible_documents(user)
+    outgoing = RelatedDocument.objects.filter(
+        source_document=document, target_document__in=visible, is_active=True,
+    ).select_related("target_document", "created_by")
+    incoming = RelatedDocument.objects.filter(
+        target_document=document, source_document__in=visible, is_active=True,
+    ).select_related("source_document", "created_by")
+    return {"outgoing": outgoing, "incoming": incoming}
+
+
+@transaction.atomic
+def deactivate_related_document(*, relationship_id, actor):
+    from .access import can_view_document
+
+    relationship = RelatedDocument.objects.select_for_update().select_related(
+        "source_document", "target_document"
+    ).get(pk=relationship_id, is_active=True)
+    if not can_view_document(actor, relationship.source_document):
+        raise PermissionDenied("You are not authorized to access the source document.")
+    if not can_view_document(actor, relationship.target_document):
+        raise PermissionDenied("You are not authorized to access the target document.")
+    relationship.is_active = False
+    relationship.save(update_fields=["is_active"])
+    _record(relationship.source_document, actor, AuditEvent.Action.RELATED_DOCUMENT_REMOVED, context={
+        "relationship_id": relationship.pk,
+        "target_document_id": relationship.target_document_id,
+        "relationship_type": relationship.relationship_type,
+    })
+    return relationship
 
 
 @transaction.atomic
