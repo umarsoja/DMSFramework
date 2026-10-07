@@ -81,7 +81,7 @@ class InternalMemoLifecycleTests(TestCase):
 
     def test_create_and_save_draft_assigns_system_fields_and_audit(self):
         document = self.make_draft()
-        self.assertRegex(document.reference, r"^APGC/IM/\d{4}/\d{6,}$")
+        self.assertIsNone(document.reference)
         self.assertEqual(document.status, Document.Status.DRAFT)
         self.assertEqual(document.created_by, self.owner)
         self.assertEqual(document.versions.count(), 1)
@@ -101,7 +101,7 @@ class InternalMemoLifecycleTests(TestCase):
         self.assertEqual(response.status_code, 302)
         document = Document.objects.get(created_by=self.owner)
         self.assertEqual(response["Location"], reverse("documents:memo-detail", args=[document.pk]))
-        self.assertNotEqual(document.reference, "")
+        self.assertIsNone(document.reference)
 
     def test_draft_edit_creates_an_immutable_prior_version(self):
         document = self.make_draft()

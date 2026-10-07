@@ -70,6 +70,13 @@ class Document(models.Model):
 
     document_type = models.ForeignKey(DocumentType, on_delete=models.PROTECT, related_name="documents")
     reference = models.CharField(max_length=80, unique=True, null=True, blank=True, editable=False)
+    issuing_office = models.ForeignKey(
+        "organization.Department", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="issued_documents",
+    )
+    issuing_office_code = models.CharField(max_length=32, blank=True, editable=False)
+    numbering_year = models.PositiveSmallIntegerField(null=True, blank=True, editable=False)
+    number_sequence = models.PositiveIntegerField(null=True, blank=True, editable=False)
     title = models.CharField(max_length=240)
     classification = models.CharField(max_length=20, choices=Classification.choices, default=Classification.INTERNAL)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
@@ -88,6 +95,11 @@ class Document(models.Model):
 
     class Meta:
         ordering = ["-modified_at", "-pk"]
+        constraints = [models.UniqueConstraint(
+            fields=["issuing_office_code", "numbering_year", "number_sequence"],
+            condition=models.Q(number_sequence__isnull=False),
+            name="uniq_document_scoped_number",
+        )]
         permissions = [
             ("download_document", "Can download permitted DMS documents"),
             ("review_document", "Can review assigned DMS documents"),
@@ -104,6 +116,23 @@ class Document(models.Model):
     @property
     def memo_date(self):
         return timezone.localtime(self.created_at).date()
+
+
+class DocumentNumberSequence(models.Model):
+    """Transactional counter for an issuing office and calendar year."""
+
+    office_code = models.CharField(max_length=32)
+    year = models.PositiveSmallIntegerField()
+    last_sequence = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=["office_code", "year"], name="uniq_document_number_office_year",
+        )]
+        ordering = ["office_code", "year"]
+
+    def __str__(self):
+        return f"{self.office_code}/{self.year}: {self.last_sequence}"
 
 
 def private_attachment_path(instance, filename):

@@ -1,5 +1,5 @@
 <dl class="document-metadata memo-metadata">
-  <div><dt>Reference number</dt><dd>{{ document.reference }}</dd></div>
+  <div><dt>Reference number</dt><dd>{{ document.reference|default:'Pending issuance' }}</dd></div>
   <div><dt>Date</dt><dd>{{ document.memo_date|date:'d F Y' }}</dd></div>
   <div><dt>From</dt><dd>{{ document.created_by.get_full_name|default:document.created_by.get_username }}</dd></div>
   {% if document.originating_assignment %}<div><dt>Originating department</dt><dd>{{ document.originating_assignment.department_name_snapshot }}</dd></div><div><dt>Originating position</dt><dd>{{ document.originating_assignment.position_title_snapshot }}</dd></div>{% endif %}

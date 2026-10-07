@@ -18,6 +18,7 @@ from .models import (
     WorkflowInstance,
     WorkflowTask,
 )
+from .numbering import allocate_document_reference
 
 
 def _record(document, actor, action, *, version=None, context=None):
@@ -116,17 +117,18 @@ def create_memo(*, owner, values, uploads=(), reviewer=None):
 
     content = get_document_type_handler(INTERNAL_MEMO_TYPE_CODE).prepare_payload(values)
     document_type = DocumentType.objects.get(code=INTERNAL_MEMO_TYPE_CODE, is_active=True)
+    originating_assignment = current_assignment(owner)
     document = Document.objects.create(
         document_type=document_type,
         title=content["subject"],
         classification=content["classification"],
         created_by=owner,
-        originating_assignment=current_assignment(owner),
+        originating_assignment=originating_assignment,
+        issuing_office=originating_assignment.department if originating_assignment else None,
+        issuing_office_code=(originating_assignment.department_code_snapshot if originating_assignment else ""),
     )
-    memo_date = timezone.localtime(document.created_at).date()
-    document.reference = f"APGC/IM/{memo_date.year}/{document.pk:06d}"
-    document.save(update_fields=["reference"])
-    version = _new_version(document, owner, content, uploads=uploads)
+    version_result = _new_version(document, owner, content, uploads=uploads)
+    version = version_result[0] if isinstance(version_result, tuple) else version_result
     DocumentAccess.objects.create(
         document=document,
         user=owner,
@@ -230,10 +232,14 @@ def finalize_document(*, document, actor):
         raise ValidationError("Only an approved memo can be finalized.")
     workflow = document.workflow
     approved_task = _latest_approved_task(document)
+    finalized_at = timezone.now()
+    allocate_document_reference(document, issued_at=finalized_at)
     document.status = Document.Status.FINALIZED
     document.finalized_by = actor
-    document.finalized_at = timezone.now()
-    document.save(update_fields=["status", "finalized_by", "finalized_at", "modified_at"])
+    document.finalized_at = finalized_at
+    document.save(update_fields=[
+        "reference", "numbering_year", "number_sequence", "status", "finalized_by", "finalized_at", "modified_at",
+    ])
     workflow.status = WorkflowInstance.Status.COMPLETED
     workflow.completed_at = document.finalized_at
     workflow.save(update_fields=["status", "completed_at"])

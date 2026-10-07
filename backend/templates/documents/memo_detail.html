@@ -1,9 +1,9 @@
 {% extends 'layouts/dms_authenticated.html' %}
-{% block title %}{{ document.reference }} | APGC DMS{% endblock %}
+{% block title %}{{ document.reference|default:'Pending issuance' }} | APGC DMS{% endblock %}
 {% block content %}
 <section class="container-xl dms-page memo-detail" aria-labelledby="page-title">
   <header class="dms-page-header memo-detail-header">
-    <div><p class="eyebrow text-brand">{{ document.document_type.name|upper }} · {{ document.reference }}</p><h1 id="page-title">{{ document.title }}</h1><div class="memo-header-meta">{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}<span>Version {{ version.number }}</span><span>Created {{ document.memo_date|date:'d M Y' }}</span></div></div>
+    <div><p class="eyebrow text-brand">{{ document.document_type.name|upper }} · {{ document.reference|default:'Pending issuance' }}</p><h1 id="page-title">{{ document.title }}</h1><div class="memo-header-meta">{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}<span>Version {{ version.number }}</span><span>Created {{ document.memo_date|date:'d M Y' }}</span></div></div>
     <div class="memo-detail-actions">
       {% if can_edit %}<a class="btn btn-outline-primary" href="{% url 'documents:memo-edit' document.pk %}">{% if document.status == 'RETURNED' %}Revise memo{% else %}Edit draft{% endif %}</a>{% endif %}
       {% if can_view_pdf %}<a class="btn btn-outline-primary" href="{% url 'documents:memo-pdf-view' document.pk %}" target="_blank" rel="noopener">View PDF</a>{% if can_download %}<a class="btn btn-primary" href="{% url 'documents:memo-pdf-download' document.pk %}">Download PDF</a>{% endif %}{% endif %}

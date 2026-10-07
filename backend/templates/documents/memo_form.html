@@ -5,7 +5,7 @@
   <header class="dms-page-header dms-page-header-compact"><div><p class="eyebrow text-brand">INTERNAL MEMO</p><h1 id="page-title">{{ page_title }}</h1><p class="text-secondary">Add memo details and choose whether to save a draft or send it for review.</p></div></header>
 
   {% if document %}<section class="card memo-system-fields mb-4" aria-label="System-controlled memo information"><div class="card-body document-metadata">
-    <div><dt>Reference number</dt><dd>{{ document.reference }}</dd></div><div><dt>Date</dt><dd>{{ document.memo_date|date:'d F Y' }}</dd></div>
+    <div><dt>Reference number</dt><dd>{{ document.reference|default:'Pending issuance' }}</dd></div><div><dt>Date</dt><dd>{{ document.memo_date|date:'d F Y' }}</dd></div>
     <div><dt>From</dt><dd>{{ document.created_by.get_full_name|default:document.created_by.get_username }}</dd></div><div><dt>Status</dt><dd>{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}</dd></div>
   </div></section>{% else %}<p class="form-note"><strong>Reference, date, and sender</strong> are assigned automatically when the memo is saved.</p>{% endif %}
 

@@ -22,12 +22,12 @@
       <thead><tr><th scope="col">Reference</th><th scope="col">Subject</th><th scope="col">Owner</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Open</span></th></tr></thead>
       <tbody>{% for document in page.object_list %}
         <tr>
-          <td data-label="Reference"><a class="memo-reference" href="{% url 'documents:memo-detail' document.pk %}">{{ document.reference }}</a></td>
+          <td data-label="Reference"><a class="memo-reference" href="{% url 'documents:memo-detail' document.pk %}">{{ document.reference|default:'Pending issuance' }}</a></td>
           <td data-label="Subject">{{ document.title }}</td>
           <td data-label="Owner">{{ document.created_by.get_full_name|default:document.created_by.get_username }}</td>
           <td data-label="Updated"><time datetime="{{ document.modified_at|date:'c' }}">{{ document.modified_at|date:'d M Y, H:i' }}</time></td>
           <td data-label="Status">{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}</td>
-          <td class="memo-row-action"><a class="btn btn-sm btn-outline-primary" href="{% url 'documents:memo-detail' document.pk %}">Open<span class="visually-hidden"> {{ document.reference }}</span></a></td>
+          <td class="memo-row-action"><a class="btn btn-sm btn-outline-primary" href="{% url 'documents:memo-detail' document.pk %}">Open<span class="visually-hidden"> {{ document.reference|default:'Pending issuance' }}</span></a></td>
         </tr>
       {% endfor %}</tbody>
     </table>
