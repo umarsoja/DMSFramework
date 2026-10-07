@@ -33,6 +33,20 @@ class WorkflowDefinition(models.Model):
         return f"{self.document_type}: {self.name} v{self.version}"
 
 
+class WorkflowActionType(models.Model):
+    """Governed, reportable action vocabulary used by workflow steps/tasks."""
+
+    code = models.SlugField(max_length=32, unique=True)
+    label = models.CharField(max_length=80)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["label", "code"]
+
+    def __str__(self):
+        return self.label
+
+
 class WorkflowStep(models.Model):
     class ActorType(models.TextChoices):
         SELECTED_USER = "SELECTED_USER", "Selected reviewer"
@@ -44,6 +58,9 @@ class WorkflowStep(models.Model):
     sequence = models.PositiveSmallIntegerField()
     name = models.CharField(max_length=100)
     is_review = models.BooleanField(default=True)
+    action_type = models.ForeignKey(
+        WorkflowActionType, null=True, on_delete=models.PROTECT, related_name="workflow_steps",
+    )
     actor_type = models.CharField(max_length=32, choices=ActorType.choices, default=ActorType.SELECTED_USER)
 
     class Meta:
@@ -199,15 +216,20 @@ class WorkflowInstance(models.Model):
 
 class WorkflowTask(models.Model):
     class Status(models.TextChoices):
-        PENDING = "PENDING", "Pending review"
+        PENDING = "PENDING", "Pending"
         APPROVED = "APPROVED", "Approved"
         RETURNED = "RETURNED", "Returned"
+        COMPLETED = "COMPLETED", "Completed"
+        CANCELLED = "CANCELLED", "Cancelled"
 
     instance = models.ForeignKey(WorkflowInstance, on_delete=models.CASCADE, related_name="tasks")
     submitted_version = models.ForeignKey(
         DocumentVersion, null=True, blank=True, on_delete=models.PROTECT, related_name="workflow_tasks",
     )
     step = models.ForeignKey(WorkflowStep, on_delete=models.PROTECT, related_name="tasks")
+    action_type = models.ForeignKey(
+        WorkflowActionType, null=True, on_delete=models.PROTECT, related_name="tasks",
+    )
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="dms_workflow_tasks")
     assigned_assignment = models.ForeignKey(
         "organization.EmployeeAssignment", null=True, blank=True, on_delete=models.PROTECT,
@@ -215,8 +237,12 @@ class WorkflowTask(models.Model):
     )
     cycle = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    instruction = models.TextField(blank=True)
     assigned_at = models.DateTimeField(default=timezone.now, editable=False)
+    due_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    response = models.TextField(blank=True)
+    evidence = models.ManyToManyField(Attachment, blank=True, related_name="workflow_tasks")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["instance", "step", "cycle"], name="uniq_workflow_task_cycle")]
@@ -227,7 +253,7 @@ class WorkflowTask(models.Model):
             original_version_id = type(self).objects.only("submitted_version_id").get(pk=self.pk).submitted_version_id
             if original_version_id != self.submitted_version_id:
                 raise ValidationError("A workflow task's submitted document version cannot be changed.")
-        elif not self.submitted_version_id:
+        elif not self.submitted_version_id and self.action_type_id and self.action_type.code in {"review", "approve"}:
             raise ValidationError("A new workflow task must identify its submitted document version.")
 
         if self.submitted_version_id:
@@ -316,6 +342,7 @@ class AuditEvent(models.Model):
         DOWNLOADED = "DOWNLOADED", "Downloaded"
         ATTACHMENT_VIEWED = "ATTACHMENT_VIEWED", "Attachment viewed"
         REASSIGNED = "REASSIGNED", "Workflow task reassigned"
+        TASK_COMPLETED = "TASK_COMPLETED", "Workflow task completed"
 
     document = models.ForeignKey(Document, on_delete=models.PROTECT, related_name="audit_events")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="dms_audit_events")

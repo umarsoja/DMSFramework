@@ -7,6 +7,7 @@ from .models import (
     DocumentType,
     DocumentVersion,
     WorkflowDefinition,
+    WorkflowActionType,
     WorkflowDecision,
     WorkflowInstance,
     WorkflowStep,
@@ -27,10 +28,17 @@ class WorkflowDefinitionAdmin(admin.ModelAdmin):
     list_filter = ("document_type", "is_active")
 
 
+@admin.register(WorkflowActionType)
+class WorkflowActionTypeAdmin(admin.ModelAdmin):
+    list_display = ("code", "label", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("code", "label")
+
+
 @admin.register(WorkflowStep)
 class WorkflowStepAdmin(admin.ModelAdmin):
-    list_display = ("name", "definition", "sequence", "is_review")
-    list_filter = ("definition", "is_review")
+    list_display = ("name", "definition", "sequence", "action_type", "is_review")
+    list_filter = ("definition", "action_type", "is_review")
 
 
 @admin.register(Document)
@@ -90,7 +98,7 @@ class WorkflowInstanceAdmin(admin.ModelAdmin):
 
 @admin.register(WorkflowTask)
 class WorkflowTaskAdmin(admin.ModelAdmin):
-    list_display = ("instance", "step", "assigned_to", "cycle", "status", "assigned_at", "completed_at")
+    list_display = ("instance", "step", "action_type", "assigned_to", "cycle", "status", "assigned_at", "due_at", "completed_at")
     readonly_fields = tuple(field.name for field in WorkflowTask._meta.fields)
 
     def has_add_permission(self, request):

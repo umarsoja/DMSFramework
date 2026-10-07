@@ -15,6 +15,7 @@ from .models import (
     DocumentVersion,
     WorkflowDecision,
     WorkflowDefinition,
+    WorkflowActionType,
     WorkflowInstance,
     WorkflowTask,
 )
@@ -95,7 +96,9 @@ def _submit_locked(document, actor, reviewer, *, submitted_version, resubmitted=
         raise ValidationError("A document creator cannot review their own memo.")
     cycle = workflow.tasks.aggregate(models_max=Max("cycle"))["models_max"] or 0
     cycle += 1
+    review_action = step.action_type or WorkflowActionType.objects.get(code="review")
     WorkflowTask.objects.create(instance=workflow, submitted_version=submitted_version, step=step,
+                                action_type=review_action,
                                 assigned_to=reviewer, assigned_assignment=reviewer_assignment, cycle=cycle)
     workflow.status = WorkflowInstance.Status.IN_PROGRESS
     workflow.completed_at = None

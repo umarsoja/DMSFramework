@@ -124,4 +124,5 @@ def pending_review_task(user, document):
     return WorkflowTask.objects.filter(instance__document=document,
         assigned_to=user,
         status="PENDING",
+        step__is_review=True,
     ).select_related("step").first()
