@@ -1,0 +1,21 @@
+@startuml
+left to right direction
+actor "DMS Documents Officer" as Officer
+rectangle "APGC DMS — document operations" {
+  usecase "Create / submit own Memo\n[CURRENT: available to logged-in users]" as OwnMemo
+  usecase "Receive intake / quality queue\n[FUTURE]" as Intake
+  usecase "Register and correct operational metadata\n[FUTURE: scoped + audited]" as Register
+  usecase "Handle authorized cross-owner documents\n[FUTURE: explicit permission]" as Handle
+  usecase "Route business review task\n[CURRENT: owner selects reviewer]" as Route
+}
+Officer --> OwnMemo
+Officer ..> Intake : target operations
+Officer ..> Register : target operations
+Officer ..> Handle : target operations
+Officer --> Route
+note bottom of OwnMemo
+  The current DMS Document Officer group (singular) has
+  no permissions. Current Memo authoring is owner-centric;
+  no Documents Officer queue exists.
+end note
+@enduml

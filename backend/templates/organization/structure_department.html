@@ -1,0 +1,7 @@
+<section class="org-department-node" aria-labelledby="department-{{ department_node.department.pk }}">
+  <div class="org-department-panel">
+    <h2 id="department-{{ department_node.department.pk }}">{{ department_node.department.name }}</h2>
+    {% if department_node.employees %}<div class="org-department-employees" role="group" aria-label="Employees assigned to {{ department_node.department.name }}"><div class="org-people">{% for node in department_node.employees %}{% include 'organization/structure_node.html' with node=node show_department=False %}{% endfor %}</div></div>{% elif not department_node.employee_count %}<p class="org-department-empty">No employees assigned yet</p>{% endif %}
+  </div>
+  {% if department_node.children %}<div class="org-department-children" role="group" aria-label="Departments within {{ department_node.department.name }}"><div class="org-department-branches" style="--department-count: {{ department_node.children|length }}">{% for child_department in department_node.children %}{% include 'organization/structure_department.html' with department_node=child_department %}{% endfor %}</div></div>{% endif %}
+</section>

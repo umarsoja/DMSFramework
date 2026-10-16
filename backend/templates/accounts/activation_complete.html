@@ -1,0 +1,3 @@
+{% extends 'layouts/authentication.html' %}
+{% block title %}Password set | APGC DMS{% endblock %}
+{% block content %}<section class="apgc-auth-card" aria-labelledby="page-title"><h1 id="page-title">Password set</h1>{% if account_active %}<p>Your account is active. Sign in with your new password.</p>{% else %}<p>Your password is set. An administrator must complete your account access setup before you can sign in to the DMS.</p>{% endif %}<a class="btn btn-primary w-100" href="{% url 'dms-login' %}">Continue to DMS sign in</a></section>{% endblock %}

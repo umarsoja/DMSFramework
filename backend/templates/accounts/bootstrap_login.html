@@ -1,0 +1,13 @@
+{% extends 'layouts/authentication.html' %}
+{% block title %}Initial administrator setup | APGC DMS{% endblock %}
+{% block content %}
+<section class="apgc-auth-card" aria-labelledby="page-title">
+  <div class="apgc-auth-brand">{% include 'partials/brand.html' %}<div><h1 id="page-title">Initial administrator setup</h1><p>Use the designated Django superuser credentials to provision the first DMS Administrator.</p></div></div>
+  <form method="post" novalidate>{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div class="apgc-auth-field{% if field.errors %} has-error{% endif %}"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>{% endfor %}
+    <button class="btn btn-primary apgc-auth-submit w-100" type="submit">Continue to initial setup</button>
+  </form>
+  <div class="apgc-auth-links"><a href="{% url 'dms-login' %}">DMS sign in</a><span>One-time bootstrap route</span></div>
+</section>
+{% endblock %}

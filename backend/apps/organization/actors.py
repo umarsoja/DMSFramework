@@ -1,10 +1,11 @@
 from django.core.exceptions import ValidationError
 
+from .authentication import DMS_ROLE_GROUPS, DMS_VIEWER_GROUP
 from .models import Department, EmployeeProfile
 from .services import current_assignment
 
 
-def _eligible(profile):
+def is_workflow_actor_eligible(profile):
     if not (
         profile
         and profile.account_status == EmployeeProfile.AccountStatus.ACTIVE
@@ -13,7 +14,13 @@ def _eligible(profile):
     ):
         return False
     assignment = profile.current_assignment
-    return bool(assignment and assignment.department.is_active and assignment.position.is_active)
+    return bool(
+        assignment
+        and assignment.department.is_active
+        and assignment.position.is_active
+        and profile.user.groups.filter(name__in=DMS_ROLE_GROUPS).exists()
+        and not profile.user.groups.filter(name=DMS_VIEWER_GROUP).exists()
+    )
 
 
 def resolve_workflow_actor(*, step, document, selected_user=None):
@@ -28,7 +35,7 @@ def resolve_workflow_actor(*, step, document, selected_user=None):
             profile = user.employee_profile
         except EmployeeProfile.DoesNotExist:
             profile = None
-        if profile and not _eligible(profile):
+        if profile and not is_workflow_actor_eligible(profile):
             raise ValidationError("The selected employee does not have an active DMS account.")
         if not profile and (not user.is_active or not user.is_staff):
             raise ValidationError("Choose an active staff reviewer.")
@@ -38,17 +45,17 @@ def resolve_workflow_actor(*, step, document, selected_user=None):
             profile = user.employee_profile
         except EmployeeProfile.DoesNotExist:
             profile = None
-        if profile and not _eligible(profile):
+        if profile and not is_workflow_actor_eligible(profile):
             raise ValidationError("The document creator's DMS account is inactive.")
     elif actor_type == step.ActorType.CREATOR_SUPERVISOR:
         profile = assignment.supervisor if assignment else None
-        if not _eligible(profile):
+        if not is_workflow_actor_eligible(profile):
             raise ValidationError("The document creator has no active supervisor to resolve for this step.")
         user = profile.user
     elif actor_type == step.ActorType.DEPARTMENT_HEAD:
         department = Department.objects.select_related("head__user").filter(pk=assignment.department_id).first() if assignment else None
         profile = department.head if department else None
-        if not _eligible(profile):
+        if not is_workflow_actor_eligible(profile):
             raise ValidationError("No active department head is configured for the document's originating department.")
         user = profile.user
     else:

@@ -7,11 +7,22 @@ from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 
 from apps.organization.authentication import DMSAuthenticationForm, dms_access_required, is_dms_viewer
+from .dashboard import dashboard_data
 
 
 def landing(request):
     """Public presentation page; no database or authentication dependency."""
     return render(request, "pages/landing.html")
+
+
+@dms_access_required
+def dashboard(request):
+    context = dashboard_data(request.user)
+    context.update({
+        "can_register_incoming": request.user.has_perm("documents.register_incoming_correspondence"),
+        "can_create_memo": not is_dms_viewer(request.user),
+    })
+    return render(request, "dashboard/index.html", context)
 
 def health_check(request):
     return HttpResponse("TradeFlow is running successfully.")
@@ -20,7 +31,6 @@ def health_check(request):
 class DMSLoginView(LoginView):
     template_name = "accounts/login.html"
     authentication_form = DMSAuthenticationForm
-
 
 class DMSLogoutView(LogoutView):
     next_page = "dms-login"

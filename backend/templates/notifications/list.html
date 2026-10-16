@@ -1,0 +1,30 @@
+{% extends 'layouts/dms_authenticated.html' %}
+{% block content %}
+<main class="dms-workspace">
+  <header class="dms-page-header">
+    <div><p class="dms-eyebrow">DMS workspace</p><h1>Notifications</h1><p>Recent events you can access. Current pending work is shown on your dashboard.</p></div>
+  </header>
+  <section class="dms-card" aria-label="Recent notifications">
+    {% if notification_items %}
+      <ul class="dms-notification-list dms-notification-list-page">
+        {% for item in notification_items %}
+          <li>
+            <form method="post" action="{% url 'notifications:open' item.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="dms-notification-item{% if item.seen_at %} is-seen{% endif %}">
+                <span class="dms-notification-title">{{ item.title }}</span>
+                <span class="dms-notification-meta">{{ item.event.document.reference }} · {{ item.event.document.title }}</span>
+                {% if item.message %}<span class="dms-notification-meta">{{ item.message }}</span>{% endif %}
+                {% if item.workflow_task.due_at %}<time class="dms-notification-due" datetime="{{ item.workflow_task.due_at|date:'c' }}">Due {{ item.workflow_task.due_at|date:'M j, Y' }}</time>{% endif %}
+                {% if item.seen_at %}<span class="dms-notification-meta">Seen {{ item.seen_at|date:'M j, Y H:i' }}</span>{% else %}<span class="dms-notification-meta">Unseen</span>{% endif %}
+              </button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No recent notifications are available.</p>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

@@ -13,6 +13,8 @@ Document types use a controlled `DocumentType` table and an explicit handler reg
 
 The existing organization domain supplies `EmployeeProfile`, current and historical `EmployeeAssignment`, departments, positions, and supervisors. Assignment rows retain historical organizational snapshots. ADR-017 defines document classification and recipient access; that policy remains authoritative for every linked supporting document.
 
+Document-level correspondence decisions are recorded separately in ADR-019 and ADR-020. This ADR does not absorb memo purpose, document numbering, incoming correspondence, or general related-document workflow into the Business Request domain. A Business Request may link existing DMS Documents as evidence; the link is not a substitute for their classification/access rules and does not make a linked document a Business Request.
+
 The current workflow schema has ordered steps, but the current document submission/decision services select the first review step and complete the workflow after that decision. Thus, the current runtime does not yet execute the multi-step Supervisor → Internal Control → ED → Finance processes described here. Supporting those processes requires a separately scoped workflow-runtime change.
 
 There is no existing Business Request model or ERP/Finance integration boundary in the inspected application. This ADR proposes a distinct business domain and records assumptions that need business approval before implementation.
@@ -133,6 +135,8 @@ Documents remain the single evidence/file layer. The originating Memo and every 
 
 The association does not grant access by itself. Every linked document retains its own classification, recipient, workflow, and explicit-grant rules under ADR-017. A request viewer must not gain a bypass to Restricted evidence merely through the request-document link. Evidence may be linked to the request revision for submitted-state traceability; the exact evidence-link snapshot and replacement rules need to be enforced by the request submission service.
 
+This request-to-document association is specific to Business Request evidence. For document-to-document business context (such as a memo, proposal, quotation, contract, or supporting correspondence), follow ADR-019's proposed reusable related-document mechanism. Do not introduce a Business Matter aggregate solely to group those records; it remains a conceptual relationship unless independently justified and approved.
+
 Approval evidence is the workflow decision/task and associated submission revision. Payment/reference evidence is either a linked DMS document or a Finance external identifier, according to Finance's retention requirements; do not represent one artifact in both places as if both were authoritative.
 
 ### 9. Authorization boundary
@@ -184,7 +188,8 @@ ERP/Finance/HR remain authoritative for posted financial transactions, payments,
 8. What happens to the one-to-one retirement relationship after a retirement is rejected, cancelled, or reopened? This ADR assumes no second retirement cycle until approved otherwise.
 9. Which data/evidence is sent to ERP/Finance, which system creates the external transaction, and which identifiers/statuses are returned?
 10. What request and linked-evidence visibility is allowed to supervisors, Internal Control, ED, Finance, delegates, and auditors beyond workflow assignment?
+11. Confirm that the proposed explicit request-to-document association plus ADR-019's document-to-document relationship is sufficient without a shared Business Matter aggregate; any separate aggregate requires its own business identity, lifecycle, authorization, or reporting justification.
 
 ## Implementation boundary
 
-This ADR is a proposed architecture decision only. It creates no models, migrations, views, forms, templates, workflow changes, permissions, UI, or integration configuration. Implementation should proceed only after business approval of the open policy points and should be split into reviewed increments: explicit multi-target workflow foundation and migration; request envelope/type registry/audit/evidence links; typed Cash Advance; typed Cash Retirement and Finance reconciliation integration.
+This ADR is a proposed architecture decision only. It creates no models, migrations, views, forms, templates, workflow changes, permissions, UI, or integration configuration. Implementation should proceed only after business approval of the open policy points and should be split into reviewed increments: explicit multi-target workflow foundation and migration; request envelope/type registry/audit/evidence links; typed Cash Advance; typed Cash Retirement and Finance reconciliation integration. This sequence is a recommendation, not authorization to implement. Document workflow changes for correspondence remain within ADR-019 and must not make Business Requests part of the Document aggregate.

@@ -1,2 +1,21 @@
-{% extends 'layouts/base.html' %}{% block title %}Organisation structure | APGC DMS{% endblock %}{% block content %}
-<section class="container-xl dms-page"><header class="dms-page-header dms-page-header-compact"><div><p class="eyebrow text-brand">ORGANISATION</p><h1>Organisation structure</h1><p class="text-secondary">Department hierarchy and configured department leads. Employee reporting is shown in dated assignments.</p></div></header><div class="org-tree">{% for department in departments %}{% include 'organization/department_tree.html' with department=department %}{% empty %}<div class="empty-state"><strong>Organisation structure is not configured</strong><span>Enter validated department data to build the structure.</span></div>{% endfor %}</div></section>{% endblock %}
+{% extends 'layouts/dms_authenticated.html' %}
+{% load static %}
+{% block title %}Organisation structure | APGC DMS{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'apgc/css/organisation-structure.css' %}">{% endblock %}
+{% block content %}
+<section class="container-xl dms-page">
+  <header class="dms-page-header dms-page-header-compact">
+    <div><p class="eyebrow text-brand">ORGANISATION</p><h1>Organisation structure</h1><p class="text-secondary">Department branches follow saved department parents; each employee card shows their saved supervisor. {{ employee_count }} employee{{ employee_count|pluralize }} shown.</p></div>
+  </header>
+  {% if department_roots or unlinked %}
+  <div class="org-chart-scroll" role="region" aria-label="Organisational reporting chart" tabindex="0">
+    <div class="org-chart">
+      {% for department_node in department_roots %}{% include 'organization/structure_department.html' with department_node=department_node %}{% endfor %}
+      {% if unlinked %}<section class="org-unlinked" aria-labelledby="org-unlinked-heading"><h2 id="org-unlinked-heading">Reporting line not recorded</h2><div class="org-people">{% for node in unlinked %}{% include 'organization/structure_card.html' with node=node show_department=True %}{% endfor %}</div></section>{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state"><strong>No current employee assignments</strong><span>Employees will appear here when they have a current assignment.</span></div>
+  {% endif %}
+</section>
+{% endblock %}

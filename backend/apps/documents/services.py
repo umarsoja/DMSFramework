@@ -1,11 +1,16 @@
 from pathlib import Path
+from datetime import datetime, time
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
 
-from .handlers import INTERNAL_MEMO_TYPE_CODE, get_document_type_handler
+from .handlers import (
+    INCOMING_CORRESPONDENCE_TYPE_CODE,
+    INTERNAL_MEMO_TYPE_CODE,
+    get_document_type_handler,
+)
 from .models import (
     Attachment,
     AuditEvent,
@@ -13,10 +18,12 @@ from .models import (
     DocumentAccess,
     DocumentType,
     DocumentVersion,
+    ManagementDirective,
     WorkflowDecision,
     WorkflowDefinition,
     WorkflowActionType,
     WorkflowInstance,
+    WorkflowStep,
     RelatedDocument,
     WorkflowTask,
 )
@@ -37,6 +44,7 @@ def _record(document, actor, action, *, version=None, context=None):
 
 
 def _store_attachments(version, actor, uploads):
+    attachments = []
     for uploaded_file in uploads:
         filename = Path(uploaded_file.name).name[:255]
         media_type = getattr(uploaded_file, "content_type", "") or "application/octet-stream"
@@ -48,10 +56,28 @@ def _store_attachments(version, actor, uploads):
             uploaded_by=actor,
         )
         attachment.file.save(filename, uploaded_file, save=True)
-    return len(uploads)
+        attachments.append(attachment)
+    return attachments
 
 
-def _new_version(document, actor, content, revision_note="", uploads=()):
+def _carry_forward_attachments(version, attachments):
+    """Copy version attachment rows while reusing their existing storage objects."""
+    source_ids = []
+    for source in attachments:
+        Attachment.objects.create(
+            version=version,
+            file=source.file.name,
+            original_filename=source.original_filename,
+            media_type=source.media_type,
+            size=source.size,
+            uploaded_by=source.uploaded_by,
+            uploaded_at=source.uploaded_at,
+        )
+        source_ids.append(source.pk)
+    return source_ids
+
+
+def _new_version(document, actor, content, revision_note="", uploads=(), carry_forward_attachments=()):
     version_number = document.current_version_number + 1 if document.pk and document.versions.exists() else 1
     version = DocumentVersion.objects.create(
         document=document,
@@ -60,12 +86,13 @@ def _new_version(document, actor, content, revision_note="", uploads=()):
         revision_note=revision_note[:500],
         created_by=actor,
     )
+    carried_attachment_ids = _carry_forward_attachments(version, carry_forward_attachments)
     _store_attachments(version, actor, uploads)
     document.title = content["subject"]
     document.classification = content["classification"]
     document.current_version_number = version_number
     document.save(update_fields=["title", "classification", "current_version_number", "modified_at"])
-    return version
+    return version, carried_attachment_ids
 
 
 def _submit_locked(document, actor, reviewer, *, submitted_version, resubmitted=False):
@@ -98,9 +125,9 @@ def _submit_locked(document, actor, reviewer, *, submitted_version, resubmitted=
     cycle = workflow.tasks.aggregate(models_max=Max("cycle"))["models_max"] or 0
     cycle += 1
     review_action = step.action_type or WorkflowActionType.objects.get(code="review")
-    WorkflowTask.objects.create(instance=workflow, submitted_version=submitted_version, step=step,
-                                action_type=review_action,
-                                assigned_to=reviewer, assigned_assignment=reviewer_assignment, cycle=cycle)
+    task = WorkflowTask.objects.create(instance=workflow, submitted_version=submitted_version, step=step,
+                                       action_type=review_action,
+                                       assigned_to=reviewer, assigned_assignment=reviewer_assignment, cycle=cycle)
     workflow.status = WorkflowInstance.Status.IN_PROGRESS
     workflow.completed_at = None
     workflow.save(update_fields=["status", "completed_at"])
@@ -109,9 +136,12 @@ def _submit_locked(document, actor, reviewer, *, submitted_version, resubmitted=
     _record(document, actor, AuditEvent.Action.RESUBMITTED if resubmitted else AuditEvent.Action.SUBMITTED,
             version=submitted_version,
             context={"reviewer_id": reviewer.pk, "cycle": cycle, "workflow_id": workflow.pk})
-    _record(document, actor, AuditEvent.Action.UNDER_REVIEW,
-            version=submitted_version,
-            context={"reviewer_id": reviewer.pk, "cycle": cycle, "workflow_id": workflow.pk})
+    event = _record(document, actor, AuditEvent.Action.UNDER_REVIEW,
+                    version=submitted_version,
+                    context={"reviewer_id": reviewer.pk, "cycle": cycle, "workflow_id": workflow.pk,
+                             "task_id": task.pk})
+    from .notifications import record_notification
+    record_notification(event, reviewer, workflow_task=task)
     return workflow
 
 
@@ -149,7 +179,337 @@ def create_memo(*, owner, values, uploads=(), reviewer=None):
 
 
 @transaction.atomic
-def save_memo(*, document, actor, values, uploads=(), revision_note="", reviewer=None):
+def register_incoming_correspondence(*, actor, values):
+    from apps.organization.services import current_assignment
+    from apps.organization.models import Department, EmployeeProfile
+
+    if not actor.has_perm("documents.register_incoming_correspondence"):
+        raise PermissionDenied("You are not authorized to register incoming correspondence.")
+    selected_office = values["receiving_office"]
+    receiving_office = Department.objects.select_for_update().get(pk=selected_office.pk)
+    if not receiving_office.is_active:
+        raise ValidationError({"receiving_office": "Choose an active receiving office."})
+    if not receiving_office.head_id:
+        raise ValidationError({
+            "receiving_office": "The receiving office must have an active designated manager before correspondence can be registered.",
+        })
+    manager = EmployeeProfile.objects.select_for_update().select_related("user").get(
+        pk=receiving_office.head_id,
+    )
+    manager_assignment = manager.assignments.select_for_update().filter(
+        end_date__isnull=True,
+        start_date__lte=timezone.localdate(),
+    ).select_related("department", "position").first()
+    if (
+        manager.account_status != EmployeeProfile.AccountStatus.ACTIVE
+        or not manager.user.is_active
+        or manager.employment_status != EmployeeProfile.EmploymentStatus.EMPLOYED
+        or manager_assignment is None
+        or manager_assignment.department_id != receiving_office.pk
+        or not manager_assignment.department.is_active
+        or not manager_assignment.position.is_active
+    ):
+        raise ValidationError({
+            "receiving_office": "The receiving office must have an active designated manager with a current assignment in that office.",
+        })
+
+    values = {**values, "receiving_office": receiving_office}
+    handler = get_document_type_handler(INCOMING_CORRESPONDENCE_TYPE_CODE)
+    content = handler.prepare_payload(values)
+    document_type = DocumentType.objects.get(code=INCOMING_CORRESPONDENCE_TYPE_CODE, is_active=True)
+    receiving_office = values["receiving_office"]
+    originating_assignment = current_assignment(actor)
+    document = Document.objects.create(
+        document_type=document_type,
+        title=content["subject"],
+        classification=content["classification"],
+        status=Document.Status.REGISTERED,
+        created_by=actor,
+        originating_assignment=originating_assignment,
+        issuing_office=receiving_office,
+        issuing_office_code=receiving_office.code,
+    )
+    uploads = [values["original_document"], *values.get("supporting_documents", ())]
+    version, _ = _new_version(document, actor, content, uploads=uploads)
+    DocumentAccess.objects.create(
+        document=document, user=actor, can_view=True, can_download=True, granted_by=actor,
+    )
+    manager_grant_created = manager.user_id != actor.pk
+    if manager_grant_created:
+        DocumentAccess.objects.create(
+            document=document, user=manager.user, can_view=True, can_download=False, granted_by=actor,
+        )
+    allocate_document_reference(document)
+    document.save(update_fields=[
+        "reference", "numbering_year", "number_sequence", "modified_at",
+    ])
+    event = _record(document, actor, AuditEvent.Action.INCOMING_REGISTERED, version=version, context={
+        "document_type": INCOMING_CORRESPONDENCE_TYPE_CODE,
+        "receiving_office_id": receiving_office.pk,
+        "external_reference": content["external_reference"],
+        "visibility_grants": [
+            {
+                "user_id": actor.pk,
+                "reason": "document_creator",
+                "can_view": True,
+                "can_download": True,
+            },
+            {
+                "user_id": manager.user_id,
+                "employee_profile_id": manager.pk,
+                "assignment_id": manager_assignment.pk,
+                "reason": "receiving_office_designated_head",
+                "grant_created": manager_grant_created,
+                "can_view": True,
+                "can_download": False,
+            },
+        ],
+    })
+    if manager_grant_created:
+        from .notifications import record_notification
+        record_notification(event, manager.user)
+    return document
+
+
+@transaction.atomic
+def register_incoming_revision(*, document, actor, values):
+    from .access import can_view_document
+
+    if not actor.has_perm("documents.register_incoming_correspondence"):
+        raise PermissionDenied("You are not authorized to register incoming correspondence revisions.")
+    document = Document.objects.select_for_update().get(pk=document.pk)
+    if not can_view_document(actor, document):
+        raise PermissionDenied("You are not authorized to access this incoming correspondence.")
+    if document.document_type.code != INCOMING_CORRESPONDENCE_TYPE_CODE:
+        raise ValidationError("Only incoming correspondence can receive an external-document revision.")
+    if document.status != Document.Status.REGISTERED:
+        raise ValidationError("Only registered incoming correspondence can receive a revision.")
+
+    current_version = document.current_version
+    current_content = current_version.content
+    supporting_names = set(current_content.get("supporting_filenames", ()))
+    new_names = {
+        Path(upload.name).name[:255]
+        for upload in [values["original_document"], *values.get("supporting_documents", ())]
+    }
+    if supporting_names.intersection(new_names):
+        raise ValidationError({
+            "supporting_documents": "New files must use filenames distinct from carried-forward supporting files.",
+        })
+    carry_forward = [
+        item for item in current_version.attachments.all()
+        if item.original_filename in supporting_names
+    ]
+    handler = get_document_type_handler(INCOMING_CORRESPONDENCE_TYPE_CODE)
+    content = handler.prepare_revision_payload(current_content, values)
+    uploads = [values["original_document"], *values.get("supporting_documents", ())]
+    version, carried_ids = _new_version(
+        document,
+        actor,
+        content,
+        revision_note=values["revision_note"],
+        uploads=uploads,
+        carry_forward_attachments=carry_forward,
+    )
+    _record(document, actor, AuditEvent.Action.INCOMING_REVISION_REGISTERED, version=version, context={
+        "revision_note": values["revision_note"].strip(),
+        "carried_forward_attachment_ids": carried_ids,
+        "previous_version": current_version.number,
+    })
+    return document
+
+
+@transaction.atomic
+def issue_management_directive(*, target_document, issuer, action_type, instruction,
+                                assignee=None, due_date=None):
+    """Issue an immutable directive, optionally creating its accountable task."""
+    from apps.organization.actors import is_workflow_actor_eligible
+    from apps.organization.models import EmployeeProfile
+    from apps.organization.services import current_assignment
+    from .access import can_view_document
+
+    if not issuer.has_perm("documents.issue_management_directives"):
+        raise PermissionDenied("You are not authorized to issue management directives.")
+    document = Document.objects.select_for_update().select_related("document_type").get(pk=target_document.pk)
+    if not can_view_document(issuer, document):
+        raise PermissionDenied("You are not authorized to access the target document.")
+    if not instruction or not instruction.strip():
+        raise ValidationError({"instruction": "Provide the management instruction."})
+
+    action = WorkflowActionType.objects.filter(pk=getattr(action_type, "pk", action_type), is_active=True).first()
+    if not action:
+        raise ValidationError({"action_type": "Choose an active workflow action type."})
+    if action.code in {"review", "approve"}:
+        raise ValidationError({"action_type": "Review and approval use the existing decision workflow."})
+    if due_date and not assignee:
+        raise ValidationError({"due_date": "A due date requires an assigned workflow task."})
+
+    task = None
+    if assignee:
+        if not issuer.has_perm("documents.assign_workflow_tasks"):
+            raise PermissionDenied("You are not authorized to assign workflow tasks.")
+        try:
+            profile = assignee.employee_profile
+        except (AttributeError, EmployeeProfile.DoesNotExist):
+            profile = None
+        if not is_workflow_actor_eligible(profile):
+            raise ValidationError({"assignee": "Choose an active DMS employee with a current assignment."})
+        issuer_profile = getattr(issuer, "employee_profile", None)
+        assignee_assignment = profile.current_assignment
+        if (
+            profile.pk == getattr(issuer_profile, "pk", None)
+            or not issuer_profile
+            or not assignee_assignment
+            or assignee_assignment.supervisor_id != issuer_profile.pk
+        ):
+            raise ValidationError({
+                "assignee": "Choose an active direct report from your current organizational assignment.",
+            })
+        if not document.versions.filter(number=document.current_version_number).exists():
+            raise ValidationError("The target document has no current version to bind to the task.")
+
+        definition = WorkflowDefinition.objects.filter(
+            document_type=document.document_type,
+            name="Management Directed Actions",
+            is_active=True,
+        ).first()
+        step = WorkflowStep.objects.filter(
+            definition=definition,
+            name="Management directed action",
+            sequence=1,
+            is_review=False,
+        ).first() if definition else None
+        if not definition or not step:
+            raise ValidationError("No generic management-action workflow step is configured for this document type.")
+        workflow, created = WorkflowInstance.objects.get_or_create(
+            document=document,
+            defaults={"definition": definition},
+        )
+        if not created and workflow.definition_id != definition.pk:
+            raise ValidationError("The document is already bound to a different workflow definition.")
+        last_cycle = workflow.tasks.filter(step=step).aggregate(value=Max("cycle"))["value"] or 0
+        due_at = timezone.make_aware(datetime.combine(due_date, time.max)) if due_date else None
+        task = WorkflowTask.objects.create(
+            instance=workflow,
+            submitted_version=document.current_version,
+            step=step,
+            action_type=action,
+            assigned_to=assignee,
+            assigned_assignment=current_assignment(assignee),
+            cycle=last_cycle + 1,
+            instruction=instruction.strip(),
+            due_at=due_at,
+        )
+
+    directive = ManagementDirective(
+        target_document=document,
+        issued_by=issuer,
+        action_type=action,
+        instruction=instruction.strip(),
+        workflow_task=task,
+    )
+    directive.full_clean()
+    directive.save()
+    audit_version = task.submitted_version if task else document.versions.filter(
+        number=document.current_version_number,
+    ).first()
+    event = _record(document, issuer, AuditEvent.Action.DIRECTIVE_ISSUED,
+                    version=audit_version,
+                    context={
+                "directive_id": directive.pk,
+                "action_type": action.code,
+                "instruction": directive.instruction,
+                "issued_at": directive.issued_at.isoformat(),
+                "assignee_id": task.assigned_to_id if task else None,
+                "due_at": task.due_at.isoformat() if task and task.due_at else None,
+                "task_id": task.pk if task else None,
+                    })
+    if task:
+        from .notifications import record_notification
+        record_notification(event, task.assigned_to, workflow_task=task)
+    return directive
+
+
+@transaction.atomic
+def create_supporting_workflow_task(*, parent_task_id, actor, assignee, action_type,
+                                    instruction, due_date=None):
+    """Delegate a supporting task from an actor's own pending task."""
+    from apps.organization.actors import is_workflow_actor_eligible
+    from apps.organization.models import EmployeeProfile
+    from apps.organization.services import current_assignment
+    from .access import can_view_document
+
+    if not actor.has_perm("documents.assign_workflow_tasks"):
+        raise PermissionDenied("You are not authorized to assign workflow tasks.")
+    parent = WorkflowTask.objects.select_for_update(of=("self",)).select_related(
+        "instance__document__document_type", "submitted_version", "step", "assigned_to",
+    ).get(pk=parent_task_id)
+    document = Document.objects.select_for_update().get(pk=parent.instance.document_id)
+    if parent.assigned_to_id != actor.pk or parent.status != WorkflowTask.Status.PENDING:
+        raise PermissionDenied("Only the current assignee of a pending task may delegate supporting work.")
+    if not can_view_document(actor, document):
+        raise PermissionDenied("You are not authorized to access the target document.")
+    if parent.action_type_id and parent.action_type.code in {"review", "approve"}:
+        raise ValidationError("Review and approval tasks cannot be delegated as supporting work.")
+    if not instruction or not instruction.strip():
+        raise ValidationError({"instruction": "Provide the task instruction."})
+
+    action = WorkflowActionType.objects.filter(
+        pk=getattr(action_type, "pk", action_type), is_active=True,
+    ).exclude(code__in=("review", "approve")).first()
+    if not action:
+        raise ValidationError({"action_type": "Choose an active actionable task type."})
+
+    try:
+        actor_profile = actor.employee_profile
+        assignee_profile = assignee.employee_profile
+    except EmployeeProfile.DoesNotExist:
+        raise ValidationError({"assignee": "Choose an active employee with a current assignment."})
+    if not is_workflow_actor_eligible(assignee_profile):
+        raise ValidationError({"assignee": "Choose an active DMS employee with a current assignment."})
+    assignment = assignee_profile.current_assignment
+    if (
+        assignee_profile.pk == actor_profile.pk
+        or not actor_profile.current_assignment
+        or assignment is None
+        or assignment.supervisor_id != actor_profile.pk
+    ):
+        raise ValidationError({
+            "assignee": "Choose an active direct report from your current organizational assignment.",
+        })
+
+    due_at = timezone.make_aware(datetime.combine(due_date, time.max)) if due_date else None
+    last_cycle = parent.instance.tasks.filter(step=parent.step).aggregate(value=Max("cycle"))["value"] or 0
+    task = WorkflowTask.objects.create(
+        instance=parent.instance,
+        submitted_version=parent.submitted_version,
+        step=parent.step,
+        action_type=action,
+        assigned_to=assignee,
+        assigned_assignment=current_assignment(assignee),
+        cycle=last_cycle + 1,
+        parent_task=parent,
+        instruction=instruction.strip(),
+        due_at=due_at,
+    )
+    event = _record(document, actor, AuditEvent.Action.TASK_ASSIGNED,
+                    version=task.submitted_version,
+                    context={
+                        "task_id": task.pk,
+                        "parent_task_id": parent.pk,
+                        "assignee_id": assignee.pk,
+                        "action_type": action.code,
+                        "instruction": task.instruction,
+                        "due_at": due_at.isoformat() if due_at else None,
+                    })
+    from .notifications import record_notification
+    record_notification(event, assignee, workflow_task=task)
+    return task
+
+
+@transaction.atomic
+def save_memo(*, document, actor, values, uploads=(), revision_note="", reviewer=None,
+              remove_attachment_ids=()):
     document = Document.objects.select_for_update().get(pk=document.pk)
     if document.created_by_id != actor.pk:
         raise PermissionDenied("Only the document owner can edit this memo.")
@@ -159,12 +519,33 @@ def save_memo(*, document, actor, values, uploads=(), revision_note="", reviewer
         raise ValidationError("Add a revision note before saving a returned memo.")
 
     content = get_document_type_handler(INTERNAL_MEMO_TYPE_CODE).prepare_payload(values)
-    version = _new_version(document, actor, content, revision_note=revision_note, uploads=uploads)
+    source_attachments = list(document.current_version.attachments.all())
+    try:
+        removed_ids = {int(attachment_id) for attachment_id in remove_attachment_ids}
+    except (TypeError, ValueError):
+        raise ValidationError({"remove_attachments": "Choose only attachments on the current version."})
+    available_ids = {attachment.pk for attachment in source_attachments}
+    if not removed_ids.issubset(available_ids):
+        raise ValidationError({"remove_attachments": "Choose only attachments on the current version."})
+    attachments_to_carry = [attachment for attachment in source_attachments if attachment.pk not in removed_ids]
+    version, carried_attachment_ids = _new_version(
+        document,
+        actor,
+        content,
+        revision_note=revision_note,
+        uploads=uploads,
+        carry_forward_attachments=attachments_to_carry,
+    )
+    attachment_audit_context = {
+        "carried_forward_attachment_ids": carried_attachment_ids,
+        "removed_attachment_ids": sorted(removed_ids),
+    }
     if document.status == Document.Status.RETURNED:
         _record(document, actor, AuditEvent.Action.REVISION_SAVED, version=version,
-                context={"revision_note": revision_note.strip()})
+                context={"revision_note": revision_note.strip(), **attachment_audit_context})
     else:
-        _record(document, actor, AuditEvent.Action.DRAFT_SAVED, version=version)
+        _record(document, actor, AuditEvent.Action.DRAFT_SAVED, version=version,
+                context=attachment_audit_context)
     if reviewer:
         _submit_locked(document, actor, reviewer, submitted_version=version,
                        resubmitted=document.status == Document.Status.RETURNED)
@@ -175,7 +556,7 @@ def save_memo(*, document, actor, values, uploads=(), revision_note="", reviewer
 def decide_review(*, task_id, actor, outcome, comment=""):
     from apps.organization.services import current_assignment
 
-    task = WorkflowTask.objects.select_for_update().select_related(
+    task = WorkflowTask.objects.select_for_update(of=("self",)).select_related(
         "instance__document", "instance__definition", "step", "submitted_version"
     ).get(pk=task_id)
     document = Document.objects.select_for_update().get(pk=task.instance.document_id)
@@ -206,9 +587,13 @@ def decide_review(*, task_id, actor, outcome, comment=""):
     workflow = task.instance
     workflow.status = WorkflowInstance.Status.APPROVED if outcome == WorkflowDecision.Outcome.APPROVE else WorkflowInstance.Status.RETURNED
     workflow.save(update_fields=["status"])
-    _record(document, actor, action, version=task.submitted_version,
-            context={"decision_id": decision.pk, "task_id": task.pk,
-                     "workflow_id": workflow.pk, "comment": decision.comment})
+    event = _record(document, actor, action, version=task.submitted_version,
+                    context={"decision_id": decision.pk, "task_id": task.pk,
+                             "workflow_id": workflow.pk, "comment": decision.comment})
+    if document.document_type.code == INTERNAL_MEMO_TYPE_CODE:
+        from .notifications import record_notification
+
+        record_notification(event, document.created_by)
     return decision
 
 
@@ -348,6 +733,7 @@ def deactivate_related_document(*, relationship_id, actor):
 
 @transaction.atomic
 def reassign_task(*, task_id, actor, new_user, reason):
+    from apps.organization.actors import is_workflow_actor_eligible
     from apps.organization.models import EmployeeProfile
     from apps.organization.services import current_assignment
     from .models import WorkflowTaskReassignment
@@ -355,11 +741,15 @@ def reassign_task(*, task_id, actor, new_user, reason):
     if not actor.has_perm("documents.reassign_workflow_tasks"):
         raise PermissionDenied("You are not authorized to reassign workflow tasks.")
     task = WorkflowTask.objects.select_for_update(of=("self",)).select_related(
-        "instance__document", "step", "assigned_to", "assigned_assignment"
+        "instance__document", "step", "assigned_to", "assigned_assignment",
+        "management_directive__issued_by", "parent_task__assigned_to",
     ).get(pk=task_id)
     document = Document.objects.select_for_update().get(pk=task.instance.document_id)
-    if task.status != WorkflowTask.Status.PENDING or document.status != Document.Status.UNDER_REVIEW:
-        raise ValidationError("Only a pending review task can be reassigned.")
+    is_directive_task = hasattr(task, "management_directive")
+    if task.status != WorkflowTask.Status.PENDING or (
+        not is_directive_task and document.status != Document.Status.UNDER_REVIEW
+    ):
+        raise ValidationError("Only an eligible pending workflow task can be reassigned.")
     if not reason.strip() or len(reason.strip()) > 500:
         raise ValidationError({"reason": "Provide a reassignment reason of up to 500 characters."})
     previous_user = task.assigned_to
@@ -369,16 +759,35 @@ def reassign_task(*, task_id, actor, new_user, reason):
     except EmployeeProfile.DoesNotExist:
         profile = None
     if profile:
-        assignment = profile.current_assignment
-        if (profile.account_status != EmployeeProfile.AccountStatus.ACTIVE
-                or profile.employment_status != EmployeeProfile.EmploymentStatus.EMPLOYED
-                or not new_user.is_active
-                or not assignment
-                or not assignment.department.is_active
-                or not assignment.position.is_active):
+        if not is_workflow_actor_eligible(profile):
             raise ValidationError("A new task must be assigned to an active employee account.")
+        if is_directive_task or task.parent_task_id:
+            if task.parent_task_id:
+                from .notifications import supporting_task_delegator
+
+                assignment_authority = supporting_task_delegator(task)
+            else:
+                assignment_authority = task.management_directive.issued_by
+            try:
+                issuer_profile = assignment_authority.employee_profile
+            except EmployeeProfile.DoesNotExist:
+                issuer_profile = None
+            assignment = profile.current_assignment
+            if (
+                profile.pk == getattr(issuer_profile, "pk", None)
+                or issuer_profile is None
+                or assignment is None
+                or assignment.supervisor_id != issuer_profile.pk
+            ):
+                raise ValidationError({
+                    "new_user": "A delegated task may only be reassigned to a current direct report of its delegating manager.",
+                })
     elif not new_user.is_active or not new_user.is_staff:
         raise ValidationError("A new task must be assigned to an active staff reviewer.")
+    elif is_directive_task or task.parent_task_id:
+        raise ValidationError({
+            "new_user": "A delegated task must be assigned to an active employee with a current direct-report relationship.",
+        })
     resolved_user = new_user
     resolved_assignment = current_assignment(new_user)
     if resolved_user.pk == previous_user.pk:
@@ -395,8 +804,10 @@ def reassign_task(*, task_id, actor, new_user, reason):
     task.assigned_to = resolved_user
     task.assigned_assignment = resolved_assignment
     task.save(update_fields=["assigned_to", "assigned_assignment"])
-    _record(document, actor, AuditEvent.Action.REASSIGNED, version=task.submitted_version,
-            context={"task_id": task.pk, "workflow_id": task.instance_id,
-                     "from_user_id": previous_user.pk,
-                     "to_user_id": resolved_user.pk, "reason": reason.strip()})
+    event = _record(document, actor, AuditEvent.Action.REASSIGNED, version=task.submitted_version,
+                    context={"task_id": task.pk, "workflow_id": task.instance_id,
+                             "from_user_id": previous_user.pk,
+                             "to_user_id": resolved_user.pk, "reason": reason.strip()})
+    from .notifications import record_notification
+    record_notification(event, resolved_user, workflow_task=task)
     return task

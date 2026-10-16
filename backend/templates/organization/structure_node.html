@@ -1,0 +1,5 @@
+<div class="org-tree-node" data-level="{{ node.role }}">
+  {% include 'organization/structure_card.html' with node=node show_department=show_department %}
+  {% if node.executive_office_reports %}<section class="org-branch org-executive-office" role="group" aria-label="Executive Office reporting to {{ node.name }}"><h3>Executive Office</h3><div class="org-people">{% for child in node.executive_office_reports %}{% include 'organization/structure_node.html' with node=child show_department=show_department %}{% endfor %}</div></section>{% endif %}
+  {% if node.children %}<div class="org-children" role="group" aria-label="Direct reports to {{ node.name }}"><div class="org-people">{% for child in node.children %}{% include 'organization/structure_node.html' with node=child show_department=show_department %}{% endfor %}</div></div>{% endif %}
+</div>

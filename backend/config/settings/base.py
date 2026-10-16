@@ -105,6 +105,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.documents.context_processors.dms_notifications",
             ],
         },
     },
@@ -180,7 +181,20 @@ MEDIA_ROOT = BASE_DIR / "media"
 # EMAIL
 # =============================================================================
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", default="smtppro.zoho.com")
+EMAIL_PORT = env.int("EMAIL_PORT", default=465)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=True)
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="dms@alliancepowerg.com")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="dms@alliancepowerg.com")
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=20)
+DMS_BASE_URL = env("DMS_BASE_URL", default="")
+
+if EMAIL_USE_SSL and EMAIL_USE_TLS:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("EMAIL_USE_SSL and EMAIL_USE_TLS cannot both be enabled.")
 
 # =============================================================================
 # LOGGING
@@ -229,7 +243,7 @@ TRADEFLOW = {
 #Login URLs
 LOGIN_URL = "dms-login"
 
-LOGIN_REDIRECT_URL = "documents:memo-list"
+LOGIN_REDIRECT_URL = "dashboard"
 
 LOGOUT_REDIRECT_URL = "dms-login"
 

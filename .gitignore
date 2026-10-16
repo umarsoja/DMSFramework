@@ -37,6 +37,10 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.bak
+backend/tmp/
+*.preview.html
+*.drawio.bkp
+*.drawio.dtmp
 
 # Build/package
 build/

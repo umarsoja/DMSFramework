@@ -1,0 +1,46 @@
+{% extends 'layouts/dms_authenticated.html' %}
+{% block title %}Employee created | APGC DMS{% endblock %}
+{% block content %}
+<section class="container-xl dms-page" aria-labelledby="page-title">
+  <header class="dms-page-header dms-page-header-compact">
+    <div>
+      <p class="eyebrow text-brand">IDENTITY &amp; ORGANISATION</p>
+      <h1 id="page-title">Employee created successfully.</h1>
+      <p class="text-secondary">{{ profile.user.get_full_name|default:profile.user.username }} · {{ profile.staff_id }}</p>
+    </div>
+  </header>
+  <div class="card"><div class="card-body">
+    <dl class="document-metadata">
+      <div><dt>Username</dt><dd><code>{{ profile.user.get_username }}</code>{% if not account_linked %} <span class="text-secondary">(generated automatically)</span>{% endif %}</dd></div>
+      <div><dt>Official email</dt><dd>{{ profile.user.email|default:'Not recorded' }}</dd></div>
+      <div><dt>Initial credentials</dt><dd>{% if profile.user.has_usable_password %}Existing credentials were preserved.{% else %}No password is set.{% endif %}</dd></div>
+    </dl>
+
+    {% if activation_eligible %}
+      <h2 class="h4 mt-4">Activation available</h2>
+      {% if delivery.status == 'SENT' %}
+        <p>The activation email was accepted by the configured email service for {{ profile.user.email }}. This confirms SMTP acceptance, not inbox delivery. The link expires in 24 hours and can be used once.</p>
+      {% elif delivery.status == 'FAILED' %}
+        <p>The employee was created, but the activation email delivery failed. The sanitized delivery status is shown below.</p>
+        <p class="text-danger">{{ delivery.latest_failure_reason }}</p>
+      {% elif delivery %}
+        <p>The activation email is currently {{ delivery.get_status_display|lower }} for {{ profile.user.email }}.</p>
+      {% else %}
+        <p>An activation link is available. No activation message is currently recorded.</p>
+      {% endif %}
+      <form class="mt-3" method="post" action="{% url 'organization:employee-resend-activation' profile.pk %}" data-confirm-kind="resend-activation" data-record-email="{{ profile.user.email|escape }}" x-data="recordConfirmation()" x-ref="actionForm" @submit="confirmSubmit($event)">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit">Send a fresh activation link</button>
+        {% include 'components/action_confirmation_dialog.html' with dialog_id='employee-created-activation-confirm' dialog_title='Send a fresh activation link?' dialog_message='The previous activation link will be invalidated and a fresh link will be sent to this employee.' confirm_label='Send Activation Email' dialog_dynamic_action=True only %}
+      </form>
+    {% elif account_linked and profile.user.has_usable_password %}
+      <h2 class="h4 mt-4">Existing account linked</h2>
+      <p class="mb-0">The account's existing password, username and saved email were preserved. No initial activation step is needed.</p>
+    {% else %}
+      <h2 class="h4 mt-4">Activation not currently available</h2>
+      <p class="mb-0">The employee record was saved. Activation requires an eligible employment and account status, a current active assignment, and an approved DMS role. Review the employee record before requesting an activation link.</p>
+    {% endif %}
+    <a class="btn btn-outline-primary mt-3" href="{% url 'organization:employee-detail' profile.pk %}">View employee record</a>
+  </div></div>
+</section>
+{% endblock %}

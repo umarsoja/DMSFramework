@@ -8,10 +8,13 @@
   </div>
   <nav aria-label="Workspace navigation">
     <ul class="dms-nav-list">
+      <li><a class="dms-nav-link{% if request.resolver_match.url_name == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}"{% if request.resolver_match.url_name == 'dashboard' %} aria-current="page"{% endif %} aria-label="Dashboard"><span class="dms-nav-icon">{% include 'components/icon.html' with name='layout-dashboard' only %}</span><span class="dms-nav-label">Dashboard</span></a></li>
       <li class="dms-nav-heading">Documents</li>
       <li><a class="dms-nav-link{% if request.resolver_match.namespace == 'documents' and request.GET.status != 'DRAFT' and request.GET.status != 'UNDER_REVIEW' and request.GET.status != 'ARCHIVED' %} active{% endif %}" href="{% url 'documents:memo-list' %}"{% if request.resolver_match.namespace == 'documents' and request.GET.status != 'DRAFT' and request.GET.status != 'UNDER_REVIEW' and request.GET.status != 'ARCHIVED' %} aria-current="page"{% endif %} aria-label="Internal memos">
         <span class="dms-nav-icon">{% include 'components/icon.html' with name='file-description' only %}</span><span class="dms-nav-label">Internal Memos</span>
       </a></li>
+      <li><a class="dms-nav-link{% if request.resolver_match.url_name == 'incoming-list' %} active{% endif %}" href="{% url 'documents:incoming-list' %}"{% if request.resolver_match.url_name == 'incoming-list' %} aria-current="page"{% endif %} aria-label="Incoming correspondence"><span class="dms-nav-icon">{% include 'components/icon.html' with name='mail' only %}</span><span class="dms-nav-label">Incoming Correspondence</span></a></li>
+      {% if perms.documents.register_incoming_correspondence %}<li><a class="dms-nav-link{% if request.resolver_match.url_name == 'incoming-register' %} active{% endif %}" href="{% url 'documents:incoming-register' %}"{% if request.resolver_match.url_name == 'incoming-register' %} aria-current="page"{% endif %} aria-label="Register incoming correspondence"><span class="dms-nav-icon">{% include 'components/icon.html' with name='file-plus' only %}</span><span class="dms-nav-label">Register Correspondence</span></a></li>{% endif %}
       {% if request.user.is_authenticated and can_create_memo %}<li><a class="dms-nav-link{% if request.resolver_match.url_name == 'memo-create' %} active{% endif %}" href="{% url 'documents:memo-create' %}"{% if request.resolver_match.url_name == 'memo-create' %} aria-current="page"{% endif %} aria-label="New internal memo">
         <span class="dms-nav-icon">{% include 'components/icon.html' with name='file-certificate' only %}</span><span class="dms-nav-label">New Internal Memo</span>
       </a></li>{% endif %}

@@ -1,0 +1,88 @@
+<mxfile host="Electron" agent="Codex">
+  <diagram id="apgc-dms-cloud-architecture" name="APGC DMS Cloud Architecture">
+    <mxGraphModel dx="1471" dy="906" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Helvetica;fontSize=25;fontStyle=1;fontColor=#16324F;" value="APGC DOCUMENT MANAGEMENT SYSTEM&#xa;Cloud Architecture Overview" vertex="1">
+          <mxGeometry height="70" width="1000" x="80" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Helvetica;fontSize=13;fontColor=#526579;" value="Logical view • provider-neutral • secure access and managed services" vertex="1">
+          <mxGeometry height="28" width="1000" x="82" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="external_top" parent="1" style="swimlane;html=1;startSize=34;horizontal=1;rounded=1;arcSize=12;fillColor=#F4F7FB;swimlaneFillColor=#F4F7FB;strokeColor=#CBD5E1;fontColor=#496176;fontStyle=1;fontSize=12;collapsible=0;" value="EXTERNAL ACCESS" vertex="1">
+          <mxGeometry height="245" width="1440" x="80" y="155" as="geometry" />
+        </mxCell>
+        <mxCell id="dms_cloud" parent="1" style="swimlane;html=1;startSize=34;horizontal=1;rounded=1;arcSize=12;fillColor=#EFF7FF;swimlaneFillColor=#EFF7FF;strokeColor=#8AB5D8;fontColor=#24577A;fontStyle=1;fontSize=12;collapsible=0;absoluteArcSize=0;" value="APGC DMS CLOUD ENVIRONMENT" vertex="1">
+          <mxGeometry height="335" width="1440" x="80" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="db" parent="dms_cloud" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#E8E4F7;strokeColor=#7666A8;strokeWidth=2;fontColor=#352B58;fontSize=15;align=center;verticalAlign=middle;spacing=10;" value="&lt;b&gt;POSTGRESQL DATABASE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#526579&quot;&gt;Structured records • users • workflow metadata&lt;/font&gt;" vertex="1">
+          <mxGeometry height="40" width="295" x="50" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="storage" parent="dms_cloud" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#E5F5F3;strokeColor=#3A9D91;strokeWidth=2;fontColor=#205E58;fontSize=15;align=center;verticalAlign=middle;spacing=10;" value="&lt;b&gt;CLOUD DOCUMENT STORAGE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#526579&quot;&gt;Files • PDFs • attachments&lt;/font&gt;" vertex="1">
+          <mxGeometry height="100" width="390" x="659" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="app" parent="dms_cloud" style="rounded=1;whiteSpace=wrap;html=1;arcSize=16;fillColor=#DCEEFF;strokeColor=#2878B8;strokeWidth=2;fontColor=#16324F;fontSize=17;align=center;verticalAlign=middle;spacing=12;shadow=1;" value="&lt;b&gt;DMS APPLICATION&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#526579&quot;&gt;Document workspace • workflow • access control • audit&lt;/font&gt;" vertex="1">
+          <mxGeometry height="100" width="444" x="215" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="email" parent="dms_cloud" style="rounded=1;whiteSpace=wrap;html=1;arcSize=16;fillColor=#FFF7E6;strokeColor=#D99A25;strokeWidth=2;fontColor=#76510E;fontSize=16;align=center;verticalAlign=middle;spacing=12;shadow=1;" value="&lt;b&gt;EMAIL SERVICE&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#526579&quot;&gt;Outbound notifications / email&lt;/font&gt;" vertex="1">
+          <mxGeometry height="85" width="294" x="1030" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="e_app_db" edge="1" parent="dms_cloud" source="app" style="endArrow=block;html=1;rounded=1;strokeColor=#7666A8;strokeWidth=2;fontSize=11;fontColor=#594B86;" target="db" value="SQL / structured data">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_app_storage" edge="1" parent="dms_cloud" source="app" style="endArrow=block;html=1;rounded=1;strokeColor=#3A9D91;strokeWidth=2;fontSize=11;fontColor=#205E58;" target="storage" value="File read / write">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="external_bottom" parent="1" style="swimlane;html=1;startSize=34;horizontal=1;rounded=1;arcSize=12;fillColor=#F7F8FA;swimlaneFillColor=#F7F8FA;strokeColor=#CBD5E1;fontColor=#496176;fontStyle=1;fontSize=12;collapsible=0;" value="CONNECTED ENTERPRISE SYSTEMS" vertex="1">
+          <mxGeometry height="140" width="1440" x="80" y="795" as="geometry" />
+        </mxCell>
+        <mxCell id="users" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=16;fillColor=#FFFFFF;strokeColor=#2F6690;strokeWidth=2;fontColor=#16324F;fontSize=16;align=center;verticalAlign=middle;spacing=12;shadow=1;" value="&lt;b&gt;APGC USERS&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#526579&quot;&gt;Employees • reviewers • administrators&lt;/font&gt;" vertex="1">
+          <mxGeometry height="100" width="275" x="145" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="https" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=16;fillColor=#E8F5EE;strokeColor=#3A9D68;strokeWidth=2;fontColor=#236343;fontSize=15;align=center;verticalAlign=middle;spacing=10;" value="&lt;b&gt;SECURE HTTPS&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#526579&quot;&gt;Encrypted client connection&lt;/font&gt;" vertex="1">
+          <mxGeometry height="100" width="250" x="545" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="domain" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=16;fillColor=#FFFFFF;strokeColor=#2F6690;strokeWidth=2;fontColor=#16324F;fontSize=16;align=center;verticalAlign=middle;spacing=12;shadow=1;" value="&lt;b&gt;DMS DOMAIN&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#526579&quot;&gt;Public application endpoint&lt;/font&gt;" vertex="1">
+          <mxGeometry height="100" width="275" x="940" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="erp" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=16;fillColor=#FFFFFF;strokeColor=#718096;strokeWidth=2;fontColor=#263746;fontSize=16;align=center;verticalAlign=middle;spacing=12;shadow=1;" value="&lt;b&gt;ERP / OTHER APPLICATIONS&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#526579&quot;&gt;External enterprise systems&lt;/font&gt;" vertex="1">
+          <mxGeometry height="75" width="450" x="575" y="835" as="geometry" />
+        </mxCell>
+        <mxCell id="e_users_https" edge="1" parent="1" source="users" style="endArrow=block;html=1;rounded=1;strokeColor=#2878B8;strokeWidth=2;" target="https" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_https_domain" edge="1" parent="1" source="https" style="endArrow=block;html=1;rounded=1;strokeColor=#2878B8;strokeWidth=2;" target="domain" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_domain_app" edge="1" parent="1" source="domain" style="endArrow=block;html=1;rounded=1;strokeColor=#2878B8;strokeWidth=2;fontSize=11;fontColor=#526579;" target="app" value="Web traffic">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1075" y="390" />
+              <mxPoint x="520" y="390" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_domain_email" edge="1" parent="1" source="domain" style="endArrow=block;html=1;rounded=1;strokeColor=#D99A25;strokeWidth=2;fontSize=11;fontColor=#76510E;" target="email" value="Notification request">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1250" y="390" />
+              <mxPoint x="1260" y="390" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_app_erp" edge="1" parent="1" source="app" style="endArrow=block;startArrow=block;html=1;rounded=1;dashed=1;strokeColor=#718096;strokeWidth=2;fontSize=11;fontColor=#526579;" target="erp" value="Integration channel — protocol to be defined">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="520" y="770" />
+              <mxPoint x="800" y="770" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="note" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=16;fillColor=#FFFBE6;strokeColor=#D6B656;fontColor=#5C4B18;fontSize=12;align=left;verticalAlign=middle;spacing=10;" value="Architecture is logical and provider-neutral. Cloud vendor, domain/DNS implementation, email provider, storage controls, network segmentation, backup/restore, and ERP integration protocol are not specified in this view." vertex="1">
+          <mxGeometry height="95" width="400" x="1090" y="825" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

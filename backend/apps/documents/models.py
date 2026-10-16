@@ -18,7 +18,6 @@ class DocumentType(models.Model):
     def __str__(self):
         return self.name
 
-
 class WorkflowDefinition(models.Model):
     document_type = models.ForeignKey(DocumentType, on_delete=models.PROTECT, related_name="workflows")
     name = models.CharField(max_length=100)
@@ -59,7 +58,8 @@ class WorkflowStep(models.Model):
     name = models.CharField(max_length=100)
     is_review = models.BooleanField(default=True)
     action_type = models.ForeignKey(
-        WorkflowActionType, null=True, on_delete=models.PROTECT, related_name="workflow_steps",
+        WorkflowActionType, null=True,
+        on_delete=models.PROTECT, related_name="workflow_steps",
     )
     actor_type = models.CharField(max_length=32, choices=ActorType.choices, default=ActorType.SELECTED_USER)
 
@@ -74,6 +74,7 @@ class WorkflowStep(models.Model):
 class Document(models.Model):
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
+        REGISTERED = "REGISTERED", "Registered"
         UNDER_REVIEW = "UNDER_REVIEW", "Under review"
         RETURNED = "RETURNED", "Returned for revision"
         APPROVED = "APPROVED", "Approved"
@@ -121,6 +122,9 @@ class Document(models.Model):
             ("download_document", "Can download permitted DMS documents"),
             ("review_document", "Can review assigned DMS documents"),
             ("reassign_workflow_tasks", "Can reassign pending DMS workflow tasks"),
+            ("register_incoming_correspondence", "Can register incoming correspondence"),
+            ("issue_management_directives", "Can issue management directives against DMS documents"),
+            ("assign_workflow_tasks", "Can assign DMS workflow tasks"),
         ]
 
     def __str__(self):
@@ -280,6 +284,10 @@ class WorkflowTask(models.Model):
         "organization.EmployeeAssignment", null=True, blank=True, on_delete=models.PROTECT,
         related_name="workflow_tasks",
     )
+    parent_task = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="supporting_tasks",
+    )
     cycle = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     instruction = models.TextField(blank=True)
@@ -295,10 +303,13 @@ class WorkflowTask(models.Model):
 
     def save(self, *args, **kwargs):
         if self.pk:
-            original_version_id = type(self).objects.only("submitted_version_id").get(pk=self.pk).submitted_version_id
+            original = type(self).objects.only("submitted_version_id", "parent_task_id").get(pk=self.pk)
+            original_version_id = original.submitted_version_id
             if original_version_id != self.submitted_version_id:
                 raise ValidationError("A workflow task's submitted document version cannot be changed.")
-        elif not self.submitted_version_id and self.action_type_id and self.action_type.code in {"review", "approve"}:
+            if original.parent_task_id != self.parent_task_id:
+                raise ValidationError("A workflow task's parent cannot be changed.")
+        elif not self.submitted_version_id:
             raise ValidationError("A new workflow task must identify its submitted document version.")
 
         if self.submitted_version_id:
@@ -306,10 +317,60 @@ class WorkflowTask(models.Model):
                 raise ValidationError({
                     "submitted_version": "The submitted version must belong to the workflow's document."
                 })
+        if self.parent_task_id:
+            if self.pk and self.parent_task_id == self.pk:
+                raise ValidationError({"parent_task": "A task cannot be its own parent."})
+            if self.parent_task.instance.document_id != self.instance.document_id:
+                raise ValidationError({"parent_task": "A supporting task must belong to its parent's document."})
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.instance.document.reference}: {self.step} ({self.get_status_display()})"
+
+
+class ManagementDirective(models.Model):
+    """Immutable management instruction targeting a DMS Document."""
+
+    target_document = models.ForeignKey(
+        Document, on_delete=models.PROTECT, related_name="management_directives",
+    )
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="issued_management_directives",
+    )
+    action_type = models.ForeignKey(
+        WorkflowActionType, on_delete=models.PROTECT, related_name="management_directives",
+    )
+    instruction = models.TextField()
+    issued_at = models.DateTimeField(default=timezone.now, editable=False)
+    workflow_task = models.OneToOneField(
+        WorkflowTask, null=True, blank=True, on_delete=models.PROTECT, related_name="management_directive",
+    )
+
+    class Meta:
+        ordering = ["-issued_at", "-pk"]
+        indexes = [models.Index(fields=["target_document", "issued_at"])]
+        default_permissions = ("view",)
+
+    def clean(self):
+        if not self.instruction.strip():
+            raise ValidationError({"instruction": "Provide the management instruction."})
+        if self.workflow_task_id:
+            task = self.workflow_task
+            if task.instance.document_id != self.target_document_id:
+                raise ValidationError({"workflow_task": "The task must target the directive's document."})
+            if task.action_type_id != self.action_type_id:
+                raise ValidationError({"workflow_task": "The task action must match the directive action."})
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Management directives are immutable.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Management directives cannot be deleted.")
+
+    def __str__(self):
+        return f"{self.action_type}: {self.target_document.reference or self.target_document.title}"
 
 
 class WorkflowDecision(models.Model):
@@ -388,8 +449,12 @@ class AuditEvent(models.Model):
         ATTACHMENT_VIEWED = "ATTACHMENT_VIEWED", "Attachment viewed"
         REASSIGNED = "REASSIGNED", "Workflow task reassigned"
         TASK_COMPLETED = "TASK_COMPLETED", "Workflow task completed"
+        TASK_ASSIGNED = "TASK_ASSIGNED", "Supporting workflow task assigned"
         RELATED_DOCUMENT_ADDED = "RELATED_DOCUMENT_ADDED", "Related document added"
         RELATED_DOCUMENT_REMOVED = "RELATED_DOCUMENT_REMOVED", "Related document removed"
+        INCOMING_REGISTERED = "INCOMING_REGISTERED", "Incoming correspondence registered"
+        INCOMING_REVISION_REGISTERED = "INCOMING_REVISION_REGISTERED", "Incoming correspondence revision registered"
+        DIRECTIVE_ISSUED = "DIRECTIVE_ISSUED", "Management directive issued"
 
     document = models.ForeignKey(Document, on_delete=models.PROTECT, related_name="audit_events")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="dms_audit_events")
@@ -445,3 +510,98 @@ class WorkflowTaskReassignment(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Workflow reassignment records cannot be deleted.")
+
+
+class NotificationReceipt(models.Model):
+    """Per-user seen state for a notification derived from an immutable DMS event."""
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="dms_notification_receipts",
+    )
+    event = models.ForeignKey(
+        AuditEvent, on_delete=models.PROTECT, related_name="notification_receipts",
+    )
+    workflow_task = models.ForeignKey(
+        WorkflowTask, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="notification_receipts",
+    )
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    seen_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-event__occurred_at", "-pk"]
+        constraints = [models.UniqueConstraint(
+            fields=["recipient", "event"], name="uniq_user_notification_event",
+        )]
+        indexes = [models.Index(fields=["recipient", "seen_at"])]
+
+    @property
+    def document(self):
+        return self.event.document
+
+    @property
+    def title(self):
+        if self.workflow_task_id:
+            if self.event.document.document_type.code == "IM" and self.workflow_task.action_type_id:
+                if self.workflow_task.action_type.code == "approve":
+                    return "Memo requires your approval"
+                if self.workflow_task.action_type.code == "review":
+                    return "Memo requires your review"
+            if self.event.action == AuditEvent.Action.TASK_COMPLETED:
+                return "Supporting task response received" if self.workflow_task.parent_task_id else "Task response received"
+            task = self.workflow_task
+            return task.action_type.label if task.action_type_id else task.step.name
+        if self.event.document.document_type.code == "IM":
+            if self.event.action == AuditEvent.Action.APPROVED:
+                return "Your memo has been approved."
+            if self.event.action == AuditEvent.Action.RETURNED:
+                return "Your memo has been returned for revision."
+        if self.event.action == AuditEvent.Action.INCOMING_REGISTERED:
+            return "Incoming correspondence awaits management action"
+        return self.event.get_action_display()
+
+    @property
+    def message(self):
+        if (
+            self.event.document.document_type.code == "IM"
+            and self.event.action == AuditEvent.Action.RETURNED
+        ):
+            reason = self.event.context.get("comment", "").strip()
+            return reason
+        return ""
+
+
+class EmailOutbox(models.Model):
+    """Delivery bookkeeping only; email content and secrets are never persisted."""
+
+    class MessageType(models.TextChoices):
+        ACCOUNT_ACTIVATION = "ACCOUNT_ACTIVATION", "Account activation"
+        PASSWORD_RESET = "PASSWORD_RESET", "Password reset"
+
+    class Status(models.TextChoices):
+        QUEUED = "QUEUED", "Queued"
+        PROCESSING = "PROCESSING", "Processing"
+        SENT = "SENT", "SMTP accepted"
+        FAILED = "FAILED", "Failed"
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="dms_email_deliveries",
+    )
+    message_type = models.CharField(max_length=32, choices=MessageType.choices)
+    source_reference = models.CharField(max_length=100, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.QUEUED)
+    queued_at = models.DateTimeField(default=timezone.now, editable=False)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    failed_at = models.DateTimeField(null=True, blank=True)
+    processing_started_at = models.DateTimeField(null=True, blank=True)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    latest_failure_reason = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ["-queued_at", "-pk"]
+        indexes = [models.Index(fields=["status", "queued_at"])]
+
+    def __str__(self):
+        return f"{self.get_message_type_display()} to user {self.recipient_id} ({self.status})"

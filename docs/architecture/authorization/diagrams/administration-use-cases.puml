@@ -1,0 +1,43 @@
+@startuml
+left to right direction
+actor "Organization manager" as OrgManager
+actor "Django staff administrator" as StaffAdmin
+actor "Django superuser" as Superuser
+rectangle "APGC DMS — organization and administration" {
+  usecase "Onboard / manage employee" as Employee
+  usecase "Manage department" as Department
+  usecase "Manage position" as Position
+  usecase "Manage employee assignment" as Assignment
+  usecase "View organization audit" as OrgAudit
+  usecase "View role/group information" as Roles
+  usecase "Configure users, groups and permissions" as AuthConfig
+  usecase "Configure document types / workflow" as DmsConfig
+  usecase "View read-only document and workflow history" as History
+}
+OrgManager --> Employee
+OrgManager --> Department
+OrgManager --> Position
+OrgManager --> Assignment
+OrgManager --> OrgAudit
+OrgManager --> Roles
+StaffAdmin --> AuthConfig
+StaffAdmin --> DmsConfig
+StaffAdmin --> History
+Superuser --|> StaffAdmin
+note right of OrgManager
+  Organization UI requires explicit custom grants:
+  manage_employees, manage_departments,
+  manage_positions, manage_roles.
+  Onboarding leaves account inactive/password unusable.
+end note
+note bottom of AuthConfig
+  Django Admin authorization is separate from DMS role labels.
+  Migrations grant manage_employees and manage_roles to DMS Administrator.
+  Department and position grants are not assigned by those migrations.
+  User/Group admin changes are audited.
+end note
+note bottom of History
+  Several document/workflow/audit models are read-only in admin.
+  This diagram does not imply CRUD where ModelAdmin forbids it.
+end note
+@enduml

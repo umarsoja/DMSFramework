@@ -1,0 +1,13 @@
+{% extends 'layouts/authentication.html' %}
+{% block title %}Set your DMS password | APGC DMS{% endblock %}
+{% block content %}
+<section class="apgc-auth-card" aria-labelledby="page-title">
+  <div class="apgc-auth-brand">{% include 'partials/brand.html' %}<div><h1 id="page-title">Set your DMS password</h1><p>Choose a password for your APGC DMS account.</p></div></div>
+  <form method="post" novalidate data-confirm-kind="activation" x-data="recordConfirmation()" x-ref="actionForm" @submit="confirmSubmit($event)">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div class="apgc-auth-field{% if field.errors %} has-error{% endif %}"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}{% if field.help_text %}<div class="form-hint">{{ field.help_text }}</div>{% endif %}</div>{% endfor %}
+    <button class="btn btn-primary apgc-auth-submit w-100" type="submit">Set password</button>
+    {% include 'components/action_confirmation_dialog.html' with dialog_id='employee-activation-confirm' dialog_title='Set password and complete account activation?' dialog_message='Account activation remains subject to existing employee eligibility and authorization rules.' confirm_label='Set Password' dialog_dynamic_action=True only %}
+  </form>
+</section>
+{% endblock %}

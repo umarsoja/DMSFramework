@@ -194,6 +194,9 @@ class OrganizationAuditEvent(models.Model):
         ROLE_CHANGED = "ROLE_CHANGED", "Role changed"
         USER_PERMISSIONS_CHANGED = "USER_PERMISSIONS_CHANGED", "User permissions changed"
         GROUP_PERMISSIONS_CHANGED = "GROUP_PERMISSIONS_CHANGED", "Group permissions changed"
+        CREDENTIALS_ESTABLISHED = "CREDENTIALS_ESTABLISHED", "Account credentials established"
+        ACTIVATION_EMAIL_RESENT = "ACTIVATION_EMAIL_RESENT", "Activation email resent"
+        PASSWORD_RESET_COMPLETED = "PASSWORD_RESET_COMPLETED", "Password reset completed"
 
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="organization_audit_events")
     actor_assignment = models.ForeignKey(EmployeeAssignment, null=True, blank=True, on_delete=models.PROTECT, related_name="organization_events_as_actor")
@@ -217,3 +220,45 @@ class OrganizationAuditEvent(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Organisation audit events cannot be deleted.")
+
+
+class EmployeeActivationToken(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="employee_activation_token")
+    token_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        default_permissions = ()
+
+    def __str__(self):
+        return f"Employee activation for user {self.user_id}"
+
+
+class EmployeeBootstrapState(models.Model):
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        default_permissions = ()
+
+    def save(self, *args, **kwargs):
+        if self.pk not in (None, 1):
+            raise ValidationError("Only the single employee bootstrap state is supported.")
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("The employee bootstrap state cannot be deleted.")
+
+
+class AuthRecoveryThrottle(models.Model):
+    """Persistent, privacy-preserving request bucket for public account recovery."""
+
+    key_hash = models.CharField(max_length=64, unique=True)
+    window_started_at = models.DateTimeField()
+    request_count = models.PositiveSmallIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        default_permissions = ()

@@ -1,0 +1,11 @@
+APGC DMS
+
+Hello {{ employee_name }},
+
+Your APGC DMS account has been created. Set your password using this secure link:
+{{ activation_url }}
+
+This link expires in {{ expires_in_hours }} hours and can be used once.
+If you need help, contact your IT support team through APGC's approved support channel.
+
+APGC DMS

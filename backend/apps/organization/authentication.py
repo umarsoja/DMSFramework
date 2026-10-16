@@ -5,7 +5,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from .models import EmployeeProfile
+from .models import EmployeeBootstrapState, EmployeeProfile
 
 
 DMS_ROLE_GROUPS = (
@@ -18,6 +18,14 @@ DMS_ROLE_GROUPS = (
     "DMS Workflow Administrator",
 )
 DMS_VIEWER_GROUP = "DMS Viewer"
+DMS_ADMIN_GROUP = "DMS Administrator"
+
+
+def bootstrap_available():
+    """The bootstrap entry point closes permanently once its first admin is provisioned."""
+    if EmployeeBootstrapState.objects.filter(pk=1, completed_at__isnull=False).exists():
+        return False
+    return not EmployeeProfile.objects.filter(user__groups__name=DMS_ADMIN_GROUP).exists()
 
 
 def has_dms_access(user):
@@ -55,6 +63,18 @@ class DMSAuthenticationForm(AuthenticationForm):
             raise ValidationError(
                 _("This account is not currently permitted to access APGC DMS."),
                 code="dms_access_denied",
+            )
+
+
+class BootstrapAuthenticationForm(AuthenticationForm):
+    """Temporary credential gate for the first DMS Administrator only."""
+
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        if not user.is_superuser:
+            raise ValidationError(
+                _("Only the configured bootstrap administrator can use initial setup."),
+                code="bootstrap_admin_required",
             )
 
 

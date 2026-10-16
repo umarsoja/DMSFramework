@@ -1,0 +1,48 @@
+@startuml
+left to right direction
+actor "Document owner" as Owner
+actor "Selected eligible reviewer" as Reviewer
+actor "Replacement task assignee" as Replacement
+rectangle "APGC DMS — single-step Memo workflow" {
+  usecase "Create / edit draft" as Draft
+  usecase "Submit exact version for review" as Submit
+  usecase "View assigned pending task" as ViewTask
+  usecase "Approve submitted version" as Approve
+  usecase "Return submitted version with reason" as Return
+  usecase "Revise with note and resubmit new version" as Resubmit
+  usecase "Reassign pending task" as Reassign
+  usecase "Finalize approved version" as Finalize
+  usecase "Archive finalized Memo" as Archive
+}
+Owner --> Draft
+Owner --> Submit
+Owner --> Resubmit
+Owner --> Finalize
+Owner --> Archive
+Reviewer --> ViewTask
+Reviewer --> Approve
+Reviewer --> Return
+Replacement --> ViewTask
+Owner ..> Submit : selected user must differ
+note right of Reviewer
+  Selected actor must meet current eligibility:
+  active/employed profile with current active
+  department and position, or temporary active
+  profileless staff compatibility path.
+  Task assignment and state—not review_document—
+  authorize the decision.
+end note
+note bottom of Submit
+  WorkflowTask.submitted_version is explicit.
+  Approve/return decisions stay bound to that version;
+  a later current_version change does not retarget them.
+end note
+note bottom of Reassign
+  Requires documents.reassign_workflow_tasks,
+  pending task, under-review document, eligible target,
+  and a reason.
+end note
+note bottom of Finalize
+  Owner + APPROVED state; output uses approved version.
+end note
+@enduml

@@ -162,3 +162,23 @@ a, button { touch-action: manipulation; }
 @media (max-width: 575.98px) { .workflow-section, .preview-section, .trust-section { padding-block: 56px; } .preview-toolbar { padding: 14px; font-size: 10px; } .preview-status { display: none; } .preview-canvas { min-height: 340px; padding: 24px 16px; } .preview-caption { padding: 24px 16px; } .preview-caption h3 { font-size: 18px; } .skeleton-sidebar { padding-inline: 10px; } .skeleton-metrics { gap: 8px; } .trust-grid { gap: 28px 20px; } .trust-item h3 { font-size: 15px; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition: none !important; animation: none !important; } }
 .trade-map-grid { background-image: radial-gradient(#dfbc871a 1px, transparent 1px); background-size: 18px 18px; }
+
+/* Accessible, keyboard-operable directory selection and action confirmation. */
+[x-cloak] { display: none !important; }
+.directory-options { max-height: 18rem; overflow-y: auto; border: 1px solid var(--tblr-border-color, #dce1e7); border-radius: .375rem; }
+.directory-option { border-bottom: 1px solid var(--tblr-border-color, #e5e7eb); }
+.directory-option:last-child { border-bottom: 0; }
+.directory-option-label { display: flex; align-items: flex-start; gap: .65rem; width: 100%; padding: .65rem .75rem; cursor: pointer; }
+.directory-option-label:hover { background: #f5f6fa; }
+.directory-option-label input { margin-top: .2rem; }
+.directory-empty { padding: .75rem; }
+.directory-selected-list { display: flex; flex-wrap: wrap; gap: .5rem; }
+.directory-chip { display: inline-flex; align-items: center; gap: .5rem; padding: .35rem .55rem; border: 1px solid #cfd7e3; border-radius: 999px; background: #f7f8fb; }
+.directory-chip-remove { border: 0; padding: 0; color: #39405e; background: transparent; text-decoration: underline; text-underline-offset: 2px; }
+html:has(.action-confirmation[open]) { scrollbar-gutter: stable; }
+.action-confirmation { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(92vw, 34rem); max-width: none; max-height: min(90vh, 48rem); overflow-y: auto; margin: 0; padding: 0; border: 1px solid #cfd7e3; border-radius: .75rem; box-shadow: 0 1.5rem 4rem #14213d40; }
+.action-confirmation::backdrop { position: fixed; inset: 0; background: #17203380; }
+.action-confirmation-content { padding: 1.5rem; }
+.action-confirmation-content h2 { margin-bottom: .75rem; }
+.action-confirmation-content p { margin-bottom: 1.5rem; }
+.action-confirmation-buttons { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; }

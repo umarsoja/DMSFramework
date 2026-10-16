@@ -1,0 +1,24 @@
+@startuml
+left to right direction
+actor "DMS Workflow Administrator" as WorkflowAdmin
+rectangle "APGC DMS — workflow controls" {
+  usecase "Configure WorkflowDefinition / WorkflowStep\n[CURRENT: Django Admin permissions]" as Config
+  usecase "Select supported actor type\n[CURRENT: model choices]" as ActorType
+  usecase "Reassign pending task\n[CURRENT: custom permission + constraints]" as Reassign
+  usecase "Monitor workflow queue / aging\n[FUTURE: role-aware workspace]" as Monitor
+  usecase "Publish versioned routing change\n[FUTURE: governance + audit]" as Publish
+  usecase "Decide assigned review task\n[CURRENT: assigned reviewer only]" as Decide
+}
+WorkflowAdmin --> Config
+WorkflowAdmin --> ActorType
+WorkflowAdmin --> Reassign
+WorkflowAdmin ..> Monitor : target capability
+WorkflowAdmin ..> Publish : target capability
+WorkflowAdmin --> Decide
+note bottom of Config
+  Migration organization.0007 grants documents.reassign_workflow_tasks
+  to this group. It does not grant workflow decision authority.
+  Current Internal Memo uses one selected-user review step.
+  Administrator role must not itself authorize decisions.
+end note
+@enduml

@@ -1,0 +1,21 @@
+@startuml
+left to right direction
+actor "DMS Standard User" as Standard
+rectangle "APGC DMS — employee workspace" {
+  usecase "Create Memo draft\n[CURRENT: available to logged-in users]" as Draft
+  usecase "Edit own draft / returned Memo\n[CURRENT: owner + state]" as Edit
+  usecase "Submit / resubmit\n[CURRENT: owner + valid reviewer]" as Submit
+  usecase "Track accessible Memo and history\n[CURRENT: visible items only]" as Track
+  usecase "Dedicated My Documents / My Tasks\n[FUTURE]" as Workspace
+}
+Standard --> Draft
+Standard --> Edit
+Standard --> Submit
+Standard --> Track
+Standard ..> Workspace : target role-aware UX
+note bottom of Draft
+  The DMS Standard User group has no permission grants.
+  Current actions are not role-gated. Employee accounts
+  currently cannot use the configured staff-only login.
+end note
+@enduml

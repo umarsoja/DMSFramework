@@ -10,7 +10,8 @@
   <form class="card memo-filter" method="get" role="search" aria-label="Search internal memos">
     <div class="card-body d-flex flex-wrap align-items-end gap-3">
       <div class="flex-fill"><label class="form-label" for="memo-search">Search</label><input class="form-control" id="memo-search" name="q" type="search" value="{{ query }}" placeholder="Reference or subject"></div>
-      <div><label class="form-label" for="memo-status">Status</label><select class="form-select" id="memo-status" name="status"><option value="">All statuses</option>{% for value,label in statuses %}<option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <div><label class="form-label" for="memo-status">Status</label><select class="form-select" id="memo-status" name="status"><option value="">All statuses</option><option value="PENDING"{% if status_filter == 'PENDING' %} selected{% endif %}>Pending</option>{% for value,label in statuses %}<option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <div><label class="form-label" for="memo-classification">Classification</label><select class="form-select" id="memo-classification" name="classification"><option value="">All classifications</option>{% for value,label in classifications %}<option value="{{ value }}"{% if classification_filter == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
       <button class="btn btn-outline-primary" type="submit">Filter</button>
     </div>
   </form>
@@ -19,26 +20,27 @@
   <div class="table-responsive memo-table-wrap">
     <table class="table table-vcenter">
       <caption class="visually-hidden">Internal memos available to you</caption>
-      <thead><tr><th scope="col">Reference</th><th scope="col">Subject</th><th scope="col">Owner</th><th scope="col">Updated</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Open</span></th></tr></thead>
+      <thead><tr><th scope="col">Reference</th><th scope="col">Subject</th><th scope="col">Classification</th><th scope="col">Owner</th><th scope="col">Updated</th><th class="memo-status-column" scope="col">Status</th><th scope="col"><span class="visually-hidden">Open</span></th></tr></thead>
       <tbody>{% for document in page.object_list %}
         <tr>
           <td data-label="Reference"><a class="memo-reference" href="{% url 'documents:memo-detail' document.pk %}">{{ document.reference|default:'Pending issuance' }}</a></td>
-          <td data-label="Subject">{{ document.title }}</td>
+      <td data-label="Subject">{{ document.title }}</td>
+          <td data-label="Classification">{% include 'components/document_classification.html' with classification=document.classification display=document.get_classification_display only %}</td>
           <td data-label="Owner">{{ document.created_by.get_full_name|default:document.created_by.get_username }}</td>
           <td data-label="Updated"><time datetime="{{ document.modified_at|date:'c' }}">{{ document.modified_at|date:'d M Y, H:i' }}</time></td>
-          <td data-label="Status">{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}</td>
+          <td class="memo-status-column" data-label="Status">{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}</td>
           <td class="memo-row-action"><a class="btn btn-sm btn-outline-primary" href="{% url 'documents:memo-detail' document.pk %}">Open<span class="visually-hidden"> {{ document.reference|default:'Pending issuance' }}</span></a></td>
         </tr>
       {% endfor %}</tbody>
     </table>
   </div>
   {% if page.paginator.num_pages > 1 %}<nav class="memo-pagination" aria-label="Memo pages"><ul class="pagination">
-    {% if page.has_previous %}<li class="page-item"><a class="page-link" href="?q={{ query|urlencode }}&amp;status={{ status_filter|urlencode }}&amp;page={{ page.previous_page_number }}" aria-label="Previous page">Previous</a></li>{% endif %}
+    {% if page.has_previous %}<li class="page-item"><a class="page-link" href="?q={{ query|urlencode }}&amp;status={{ status_filter|urlencode }}&amp;classification={{ classification_filter|urlencode }}&amp;page={{ page.previous_page_number }}" aria-label="Previous page">Previous</a></li>{% endif %}
     <li class="page-item active"><span class="page-link" aria-current="page">{{ page.number }} of {{ page.paginator.num_pages }}</span></li>
-    {% if page.has_next %}<li class="page-item"><a class="page-link" href="?q={{ query|urlencode }}&amp;status={{ status_filter|urlencode }}&amp;page={{ page.next_page_number }}" aria-label="Next page">Next</a></li>{% endif %}
+    {% if page.has_next %}<li class="page-item"><a class="page-link" href="?q={{ query|urlencode }}&amp;status={{ status_filter|urlencode }}&amp;classification={{ classification_filter|urlencode }}&amp;page={{ page.next_page_number }}" aria-label="Next page">Next</a></li>{% endif %}
   </ul></nav>{% endif %}
   {% else %}
-  <div class="empty-state"><span class="empty-state-icon" aria-hidden="true">▤</span><h2>{% if query or status_filter %}No matching memos{% else %}No memos yet{% endif %}</h2><p>{% if query or status_filter %}Try another search or status filter.{% else %}Start a memo draft when you are ready.{% endif %}</p>{% if not query and not status_filter and can_create_memo %}<a class="btn btn-primary" href="{% url 'documents:memo-create' %}">Create the first memo</a>{% endif %}</div>
+  <div class="empty-state"><span class="empty-state-icon" aria-hidden="true">▤</span><h2>{% if query or status_filter or classification_filter %}No matching memos{% else %}No memos yet{% endif %}</h2><p>{% if query or status_filter or classification_filter %}Try another search or filter.{% else %}Start a memo draft when you are ready.{% endif %}</p>{% if not query and not status_filter and not classification_filter and can_create_memo %}<a class="btn btn-primary" href="{% url 'documents:memo-create' %}">Create the first memo</a>{% endif %}</div>
   {% endif %}
 </section>
 {% endblock %}

@@ -3,7 +3,7 @@
     <button class="dms-icon-button dms-nav-toggle" type="button" data-dms-sidebar-toggle aria-controls="dms-sidebar" aria-expanded="false" aria-label="Open workspace navigation">
       <span aria-hidden="true">☰</span>
     </button>
-    <a class="dms-brand" href="{% url 'documents:memo-list' %}" aria-label="APGC DMS workspace">
+    <a class="dms-brand" href="{% url 'dashboard' %}" aria-label="APGC DMS dashboard">
       {% include 'partials/brand.html' %}
       <span class="dms-brand-divider" aria-hidden="true"></span>
       <span class="dms-brand-product">Document Management System</span>
@@ -12,12 +12,32 @@
 
   <div class="dms-topbar-actions">
     <details class="dms-menu dms-notifications">
-      <summary class="dms-icon-button" aria-label="Notifications; none available">
-        <span aria-hidden="true">◉</span><span class="visually-hidden">Notifications</span>
+      <summary class="dms-icon-button dms-notification-trigger" aria-label="Notifications{% if notification_unread_count %}, {{ notification_unread_count }} unseen actionable items{% endif %}">
+        {% include 'components/icon.html' with name='bell' %}<span class="visually-hidden">Notifications</span>
+        {% if notification_unread_count %}<span class="dms-notification-count" aria-hidden="true">{{ notification_unread_count }}</span>{% endif %}
       </summary>
       <section class="dms-menu-panel dms-notification-panel" aria-label="Notifications">
         <h2>Notifications</h2>
-        <p>No notifications are available.</p>
+        {% if notification_items %}
+          <ul class="dms-notification-list">
+            {% for item in notification_items %}
+              <li>
+                <form method="post" action="{% url 'notifications:open' item.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="dms-notification-item{% if item.seen_at %} is-seen{% endif %}">
+                    <span class="dms-notification-title">{{ item.title }}</span>
+                    <span class="dms-notification-meta">{{ item.event.document.reference }} · {{ item.event.document.title }}</span>
+                    {% if item.message %}<span class="dms-notification-meta">{{ item.message|truncatechars:140 }}</span>{% endif %}
+                    {% if item.workflow_task.due_at %}<time class="dms-notification-due" datetime="{{ item.workflow_task.due_at|date:'c' }}">Due {{ item.workflow_task.due_at|date:'M j, Y' }}</time>{% endif %}
+                  </button>
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>No new actionable notifications.</p>
+        {% endif %}
+        <a class="dms-notification-all" href="{% url 'notifications:list' %}">View all</a>
       </section>
     </details>
 

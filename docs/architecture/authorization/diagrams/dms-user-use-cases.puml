@@ -1,0 +1,46 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+actor "Authenticated DMS user" as User
+actor "Document owner" as Owner
+actor "Accessible-document grantee / assignee" as Reader
+actor "Django superuser" as Superuser
+
+rectangle "APGC DMS — Memo workspace" {
+  usecase "Sign in" as Login
+  usecase "List visible Memos" as List
+  usecase "Create Memo draft" as Create
+  usecase "Edit own draft / returned Memo" as Edit
+  usecase "Submit / resubmit own Memo" as Submit
+  usecase "View accessible Memo details, versions and audit" as View
+  usecase "View finalized/archived PDF" as Preview
+  usecase "Download PDF / attachment" as Download
+}
+User --> Login
+User --> List
+User --> Create
+Owner --> Edit
+Owner --> Submit
+Reader --> View
+Reader --> Preview
+Reader --> Download
+Superuser --|> User
+note right of Login
+  Configured route uses Django Admin login.
+  Account must be active, staff, and have
+  usable credentials.
+end note
+note bottom of List
+  Visibility is object-scoped: owner, active view grant,
+  or assigned workflow task. Superuser does not bypass
+  this Memo-workspace helper.
+end note
+note bottom of Download
+  Owner, or access grant with both view and download.
+  documents.download_document is not enforced here.
+end note
+note bottom of Submit
+  Owner/state rules apply; a different eligible reviewer
+  is selected. Submission binds an exact DocumentVersion.
+end note
+@enduml

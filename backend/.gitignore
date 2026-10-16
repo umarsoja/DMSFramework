@@ -17,6 +17,7 @@ logs/*
 
 # Media
 media/
+private-media/
 
 # IDE
 .vscode/
@@ -26,3 +27,10 @@ media/
 node_modules/
 static/vendor/
 staticfiles/
+tmp/
+*.preview.html
+*.drawio.bkp
+*.drawio.dtmp
+
+#ignore database backup
+backups/

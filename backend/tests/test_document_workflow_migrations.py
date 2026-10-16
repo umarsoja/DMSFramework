@@ -9,7 +9,14 @@ class WorkflowSubmittedVersionMigrationTests(TransactionTestCase):
 
     @classmethod
     def targets_with_documents_at(cls, node, executor):
-        return [leaf for leaf in executor.loader.graph.leaf_nodes() if leaf[0] != "documents"] + [node]
+        # Keep organization at 0006 while moving documents between 0004 and
+        # 0005; organization.0007 depends on documents.0005 and cannot remain
+        # applied while this test rolls documents back to 0004.
+        other_leaves = [
+            leaf for leaf in executor.loader.graph.leaf_nodes()
+            if leaf[0] not in {"documents", "organization"}
+        ]
+        return other_leaves + [("organization", "0006_alter_organizationauditevent_action"), node]
 
     @classmethod
     def setUpClass(cls):

@@ -1,0 +1,24 @@
+@startuml
+left to right direction
+actor "DMS Administrator" as DMSAdmin
+actor "Django superuser" as Superuser
+rectangle "APGC DMS — enterprise administration" {
+  usecase "Configure document types and workflow models\n[CURRENT: Django Admin perms]" as Configure
+  usecase "Manage users / groups / permissions\n[CURRENT: Django Admin + audit]" as Identity
+  usecase "Govern role policy and access reviews\n[FUTURE: DMS role]" as Governance
+  usecase "View privileged administration audit\n[PARTIAL: admin/organization audit surfaces]" as Audit
+  usecase "Bypass document ownership / classification\n[NOT implied; policy decision]" as Bypass
+}
+DMSAdmin ..> Configure : role-specific grant future
+DMSAdmin ..> Identity : role-specific grant future
+DMSAdmin ..> Governance : target responsibility
+DMSAdmin ..> Audit : target capability
+Superuser --> Configure
+Superuser --> Identity
+Superuser --> Audit
+note bottom of Superuser
+  Django superuser is an account-level status, not the
+  DMS Administrator group. Memo workspace visibility and
+  service invariants still apply; do not conflate identities.
+end note
+@enduml

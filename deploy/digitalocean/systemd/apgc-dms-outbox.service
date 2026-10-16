@@ -1,0 +1,16 @@
+[Unit]
+Description=Process APGC DMS email outbox
+After=apgc-dms.service
+
+[Service]
+Type=oneshot
+User=dmsapp
+Group=www-data
+WorkingDirectory=/opt/apgc-dms/app/backend
+EnvironmentFile=/etc/apgc-dms/apgc-dms.env
+ExecStart=/opt/apgc-dms/venv/bin/python manage.py process_email_outbox --limit=100
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/apgc-dms/private-media

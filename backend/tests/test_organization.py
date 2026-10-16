@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import RequestFactory, TestCase
@@ -19,8 +20,8 @@ class OrganizationManagementTests(TestCase):
         User = get_user_model()
         self.admin = User.objects.create_superuser(username="org-admin", email="admin@example.test", password="pw")
         self.creator_user = User.objects.create_user(username="creator", first_name="Casey", password="pw")
-        self.reviewer_user = User.objects.create_user(username="reviewer", first_name="Riley", is_staff=True, password="pw")
-        self.replacement_user = User.objects.create_user(username="replacement", first_name="Jordan", is_staff=True, password="pw")
+        self.reviewer_user = User.objects.create_user(username="reviewer", first_name="Riley", password="pw")
+        self.replacement_user = User.objects.create_user(username="replacement", first_name="Jordan", password="pw")
         self.viewer = User.objects.create_user(username="viewer", password="pw")
         self.department = Department.objects.create(code="D-001", name="Development")
         self.finance = Department.objects.create(code="D-002", name="Finance")
@@ -35,7 +36,22 @@ class OrganizationManagementTests(TestCase):
         self.replacement = EmployeeProfile.objects.create(
             user=self.replacement_user, staff_id="STAFF-003", account_status=EmployeeProfile.AccountStatus.ACTIVE
         )
+        self.admin_profile = EmployeeProfile.objects.create(
+            user=self.admin, staff_id="STAFF-ADMIN", account_status=EmployeeProfile.AccountStatus.ACTIVE
+        )
+        for user, group_name in (
+            (self.admin, "DMS Administrator"),
+            (self.creator_user, "DMS Standard User"),
+            (self.reviewer_user, "DMS Department Manager/HOD"),
+            (self.replacement_user, "DMS Document Officer"),
+            (self.viewer, "DMS Viewer"),
+        ):
+            user.groups.add(Group.objects.get(name=group_name))
         today = timezone.localdate()
+        self.admin_assignment = create_assignment(
+            employee=self.admin_profile, department=self.department, position=self.position,
+            start_date=today - timedelta(days=30), actor=self.admin,
+        )
         self.reviewer_assignment = create_assignment(
             employee=self.reviewer, department=self.department, position=self.other_position,
             start_date=today - timedelta(days=10), actor=self.admin,
@@ -286,6 +302,148 @@ class OrganizationManagementTests(TestCase):
         self.assertEqual(event.new_assignment, self.replacement_assignment)
         self.assertTrue(document.audit_events.filter(action="REASSIGNED").exists())
 
+    def test_reassignment_page_uses_directory_labels_and_confirmation(self):
+        document = self.make_memo(reviewer=self.reviewer_user)
+        task = document.workflow.tasks.get()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("organization:task-reassign", args=[task.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Jordan — Analyst (D-002)")
+        self.assertNotContains(response, self.replacement_user.username)
+        self.assertContains(response, "Reassign this workflow task?")
+        self.assertContains(response, "You are about to change responsibility from")
+        self.assertContains(response, "requestSubmit(action)")
+        self.assertContains(response, "Cancel")
+
+    def test_employee_access_changes_and_organization_deactivation_have_confirmations(self):
+        self.client.force_login(self.admin)
+        onboarding = self.client.get(reverse("organization:employee-create"))
+        self.assertContains(onboarding, 'data-confirm-kind="employee"')
+        self.assertContains(onboarding, 'data-confirm-mode="create"')
+        self.assertContains(onboarding, "Create Employee")
+        self.assertContains(onboarding, "confirmSubmit($event)")
+
+        employee_edit = self.client.get(reverse("organization:employee-edit", args=[self.creator.pk]))
+        self.assertContains(employee_edit, 'data-confirm-mode="update"')
+        self.assertContains(employee_edit, 'data-initial-account-status="ACTIVE"')
+        self.assertContains(employee_edit, 'x-text="confirmationLabel"')
+
+        department_edit = self.client.get(reverse("organization:department-edit", args=[self.department.pk]))
+        self.assertContains(department_edit, 'data-confirm-kind="department"')
+        self.assertContains(department_edit, 'data-initial-active="true"')
+        self.assertContains(department_edit, 'x-text="confirmationLabel"')
+        department_create = self.client.get(reverse("organization:department-create"))
+        self.assertNotContains(department_create, "organization-deactivation-confirm")
+        self.assertContains(department_create, "Create Department")
+
+        position_edit = self.client.get(reverse("organization:position-edit", args=[self.position.pk]))
+        self.assertContains(position_edit, 'data-confirm-kind="position"')
+        self.assertContains(position_edit, 'x-text="confirmationLabel"')
+        position_create = self.client.get(reverse("organization:position-create"))
+        self.assertContains(position_create, "Create Position")
+
+    def test_organization_confirmation_cancel_and_confirm_controls_use_the_original_form(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("organization:department-create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<button class="btn btn-outline-primary" type="button" autofocus')
+        self.assertContains(response, '@click="$refs.confirmationDialog.close()"')
+        self.assertContains(response, 'x-ref="actionForm"')
+        self.assertContains(response, 'form.requestSubmit(action)')
+        self.assertNotContains(response, 'type="submit" autofocus')
+
+    def test_employee_update_confirmation_covers_assignment_and_account_status_audit(self):
+        self.client.force_login(self.admin)
+        assigned_role = Group.objects.get(name="DMS Document Officer")
+        response = self.client.post(reverse("organization:employee-edit", args=[self.creator.pk]), {
+            "staff_id": self.creator.staff_id,
+            "employment_status": EmployeeProfile.EmploymentStatus.EMPLOYED,
+            "account_status": EmployeeProfile.AccountStatus.INACTIVE,
+            "department": self.finance.pk,
+            "position": self.other_position.pk,
+            "supervisor": self.reviewer.pk,
+            "start_date": timezone.localdate().isoformat(),
+            "roles": [assigned_role.pk],
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.creator.refresh_from_db()
+        self.creator_user.refresh_from_db()
+        self.assertEqual(self.creator.account_status, EmployeeProfile.AccountStatus.INACTIVE)
+        self.assertFalse(self.creator_user.is_active)
+        self.assertEqual(self.creator.current_assignment.department, self.finance)
+        self.assertEqual(self.creator.current_assignment.position, self.other_position)
+        self.assertEqual(self.creator.current_assignment.supervisor, self.reviewer)
+        self.assertIn(assigned_role, self.creator_user.groups.all())
+        self.assertTrue(OrganizationAuditEvent.objects.filter(
+            subject_user=self.creator_user,
+            action=OrganizationAuditEvent.Action.ACCOUNT_STATUS_CHANGED,
+        ).exists())
+        self.assertTrue(OrganizationAuditEvent.objects.filter(
+            subject_user=self.creator_user,
+            action=OrganizationAuditEvent.Action.ASSIGNMENT_CREATED,
+        ).exists())
+        self.assertTrue(OrganizationAuditEvent.objects.filter(
+            subject_user=self.creator_user,
+            action=OrganizationAuditEvent.Action.ROLE_CHANGED,
+        ).exists())
+
+    def test_organization_form_validation_keeps_values_and_existing_feedback(self):
+        self.client.force_login(self.admin)
+        department_response = self.client.post(reverse("organization:department-create"), {
+            "code": self.department.code, "name": "Entered department name", "description": "Retained text",
+            "parent": "", "head": "", "is_active": "on",
+        })
+        self.assertEqual(department_response.status_code, 200)
+        self.assertEqual(department_response.context["form"]["name"].value(), "Entered department name")
+        self.assertEqual(department_response.context["form"]["description"].value(), "Retained text")
+        self.assertTrue(department_response.context["form"]["code"].errors)
+
+        employee_response = self.client.post(reverse("organization:employee-edit", args=[self.creator.pk]), {
+            "staff_id": self.reviewer.staff_id,
+            "employment_status": EmployeeProfile.EmploymentStatus.EMPLOYED,
+            "account_status": EmployeeProfile.AccountStatus.ACTIVE,
+            "department": self.department.pk,
+            "position": self.position.pk,
+            "supervisor": self.reviewer.pk,
+            "start_date": "",
+            "roles": [Group.objects.get(name="DMS Standard User").pk],
+        })
+        self.assertEqual(employee_response.status_code, 200)
+        self.assertEqual(employee_response.context["form"]["staff_id"].value(), self.reviewer.staff_id)
+        self.assertTrue(employee_response.context["form"]["staff_id"].errors)
+        self.assertContains(employee_response, 'data-confirm-mode="update"')
+
+    def test_department_create_remains_csrf_protected_and_authorized(self):
+        from django.test import Client
+
+        payload = {
+            "code": "CSRF-DEPT", "name": "CSRF Department", "description": "",
+            "parent": "", "head": "", "is_active": "on",
+        }
+        self.client.force_login(self.viewer)
+        denied = self.client.post(reverse("organization:department-create"), payload)
+        self.assertEqual(denied.status_code, 403)
+        self.assertFalse(Department.objects.filter(code="CSRF-DEPT").exists())
+
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin)
+        url = reverse("organization:department-create")
+
+        page = client.get(url)
+        self.assertEqual(page.status_code, 200)
+        rejected = client.post(url, payload)
+        self.assertEqual(rejected.status_code, 403)
+        self.assertFalse(Department.objects.filter(code="CSRF-DEPT").exists())
+
+        token = client.cookies["csrftoken"].value
+        accepted = client.post(url, payload, HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(accepted.status_code, 302)
+        self.assertTrue(Department.objects.filter(code="CSRF-DEPT").exists())
+
     def test_transfer_then_reassignment_preserves_the_pending_task_history(self):
         document = self.make_memo(reviewer=self.reviewer_user)
         task = document.workflow.tasks.get()
@@ -413,17 +571,272 @@ class OrganizationManagementTests(TestCase):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 200)
 
+    def test_organization_structure_uses_saved_reporting_lines_and_keeps_root_employees(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("organization:structure"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="org-card"')
+        self.assertContains(response, "Casey")
+        self.assertContains(response, "Riley")
+        self.assertContains(response, 'aria-label="Direct reports to Riley"')
+        self.assertContains(response, "Jordan")
+        self.assertContains(response, reverse("organization:employee-detail", args=[self.creator.pk]))
+        self.assertNotContains(response, 'class="org-status')
+
+    def test_structure_nests_departments_by_parent_and_preserves_cross_department_supervisors(self):
+        from apps.organization.models import EmployeeAssignment
+
+        self.finance.parent = self.department
+        self.finance.save(update_fields=["parent", "updated_at"])
+        operations = Department.objects.create(code="D-003", name="Operations", parent=self.department)
+        cross_department_user = get_user_model().objects.create_user(
+            username="finance-report", first_name="Finance", last_name="Officer",
+        )
+        cross_department_profile = EmployeeProfile.objects.create(
+            user=cross_department_user, staff_id="STAFF-FINANCE", account_status=EmployeeProfile.AccountStatus.ACTIVE,
+        )
+        EmployeeAssignment.objects.create(
+            employee=cross_department_profile, department=self.finance, position=self.position,
+            supervisor=self.reviewer, start_date=timezone.localdate(),
+        )
+        operations_user = get_user_model().objects.create_user(
+            username="operations-report", first_name="Operations", last_name="Officer",
+        )
+        operations_profile = EmployeeProfile.objects.create(
+            user=operations_user, staff_id="STAFF-OPERATIONS", account_status=EmployeeProfile.AccountStatus.ACTIVE,
+        )
+        EmployeeAssignment.objects.create(
+            employee=operations_profile, department=operations, position=self.position,
+            supervisor=self.reviewer, start_date=timezone.localdate(),
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("organization:structure"))
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        development = response.context["department_roots"][0]
+        self.assertEqual(development["department"], self.department)
+        self.assertEqual(development["children"][0]["department"], self.finance)
+        self.assertEqual(development["children"][1]["department"], operations)
+        self.assertIn('aria-label="Departments within Development"', html)
+        self.assertIn('style="--department-count: 2"', html)
+        self.assertNotIn("Reports to Riley", html)
+        self.assertEqual(cross_department_profile.current_assignment.supervisor, self.reviewer)
+        self.assertEqual(html.count(reverse("organization:employee-detail", args=[cross_department_profile.pk])), 1)
+        self.assertNotIn("Reporting line not recorded", html)
+
+    def test_structure_renders_empty_child_department_alongside_populated_sibling(self):
+        from apps.organization.models import EmployeeAssignment
+
+        executive_department = Department.objects.create(code="D-ED", name="Executive Director Branch")
+        corporate_services = Department.objects.create(
+            code="D-CS", name="Corporate Services", parent=executive_department,
+        )
+        self.replacement_assignment.end_date = timezone.localdate() - timedelta(days=1)
+        self.replacement_assignment.save(update_fields=["end_date"])
+        self.finance.parent = executive_department
+        self.finance.save(update_fields=["parent", "updated_at"])
+
+        executive_user = get_user_model().objects.create_user(
+            username="executive-director", first_name="Executive", last_name="Director",
+        )
+        executive_profile = EmployeeProfile.objects.create(
+            user=executive_user, staff_id="STAFF-ED", account_status=EmployeeProfile.AccountStatus.ACTIVE,
+        )
+        executive_position = Position.objects.create(
+            code="P-ED", title="Executive Director / Chief Executive Officer",
+        )
+        EmployeeAssignment.objects.create(
+            employee=executive_profile, department=executive_department, position=executive_position,
+            start_date=timezone.localdate(),
+        )
+
+        corporate_services_user = get_user_model().objects.create_user(
+            username="corporate-services-head", first_name="Corporate", last_name="Services",
+        )
+        corporate_services_profile = EmployeeProfile.objects.create(
+            user=corporate_services_user, staff_id="STAFF-CS", account_status=EmployeeProfile.AccountStatus.ACTIVE,
+        )
+        corporate_services_position = Position.objects.create(
+            code="P-CS", title="Chief Corporate Service Officer",
+        )
+        EmployeeAssignment.objects.create(
+            employee=corporate_services_profile, department=corporate_services,
+            position=corporate_services_position, supervisor=executive_profile,
+            start_date=timezone.localdate(),
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("organization:structure"))
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        executive_node = next(
+            node for node in response.context["department_roots"]
+            if node["department"] == executive_department
+        )
+        self.assertEqual(
+            [child["department"] for child in executive_node["children"]],
+            [corporate_services, self.finance],
+        )
+        finance_node = executive_node["children"][1]
+        self.assertEqual(finance_node["employee_count"], 0)
+        self.assertEqual(finance_node["employees"], [])
+        self.assertIn('style="--department-count: 2"', html)
+        self.assertLess(html.index("Corporate Services</h2>"), html.index("Finance</h2>"))
+        self.assertIn("No employees assigned yet", html)
+        self.assertIn("Chief Corporate Service Officer", html)
+        for profile_id in EmployeeAssignment.objects.filter(
+            end_date__isnull=True, start_date__lte=timezone.localdate(),
+        ).values_list("employee_id", flat=True):
+            self.assertEqual(html.count(reverse("organization:employee-detail", args=[profile_id])), 1)
+
+    def test_structure_keeps_finance_sibling_of_corporate_services_and_it_nested_under_corporate(self):
+        from apps.organization.models import EmployeeAssignment
+
+        today = timezone.localdate()
+        executive_department = Department.objects.create(
+            code="D-ED", name="Executive Director Branch", parent=self.department,
+        )
+        corporate_services = Department.objects.create(
+            code="D-CS", name="Corporate Services", parent=executive_department,
+        )
+        information_technology = Department.objects.create(
+            code="D-IT", name="Information Technology", parent=corporate_services,
+        )
+        finance = Department.objects.create(
+            code="D-FIN", name="Finance Department", parent=executive_department,
+        )
+
+        def add_employee(username, first_name, last_name, staff_id, department, title, code, supervisor=None):
+            user = get_user_model().objects.create_user(
+                username=username, first_name=first_name, last_name=last_name,
+            )
+            profile = EmployeeProfile.objects.create(
+                user=user, staff_id=staff_id, account_status=EmployeeProfile.AccountStatus.ACTIVE,
+            )
+            position = Position.objects.create(code=code, title=title)
+            EmployeeAssignment.objects.create(
+                employee=profile, department=department, position=position,
+                supervisor=supervisor, start_date=today,
+            )
+            return profile
+
+        executive_director = add_employee(
+            "structure-ed", "Executive", "Director", "STAFF-STRUCT-ED", executive_department,
+            "Executive Director", "P-STRUCT-ED",
+        )
+        add_employee(
+            "structure-cs-head", "Corporate", "Services", "STAFF-STRUCT-CS", corporate_services,
+            "Chief Corporate Services Officer", "P-STRUCT-CS", executive_director,
+        )
+        it_head = add_employee(
+            "structure-it-head", "Information", "Technology", "STAFF-STRUCT-IT", information_technology,
+            "Head of Information Technology", "P-STRUCT-IT", executive_director,
+        )
+        it_officer = add_employee(
+            "structure-it-officer", "IT", "Officer", "STAFF-STRUCT-ITO", information_technology,
+            "Information Technology Officer", "P-STRUCT-ITO", it_head,
+        )
+        finance_officer = add_employee(
+            "structure-cfo", "Finance", "Officer", "STAFF-STRUCT-CFO", finance,
+            "Chief Financial Officer", "P-STRUCT-CFO", executive_director,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("organization:structure"))
+
+        self.assertEqual(response.status_code, 200)
+        executive_node = next(
+            node for root in response.context["department_roots"]
+            for node in root["children"]
+            if node["department"] == executive_department
+        )
+        self.assertEqual(
+            [node["department"] for node in executive_node["children"]],
+            [corporate_services, finance],
+        )
+        corporate_node = executive_node["children"][0]
+        self.assertEqual(corporate_node["children"][0]["department"], information_technology)
+        it_node = corporate_node["children"][0]
+        self.assertEqual(it_node["employees"][0]["profile"], it_head)
+        self.assertEqual(it_node["employees"][0]["children"][0]["profile"], it_officer)
+        finance_node = executive_node["children"][1]
+        self.assertEqual(finance_node["employees"][0]["profile"], finance_officer)
+
+        html = response.content.decode()
+        self.assertLess(html.index("Corporate Services</h2>"), html.index("Finance Department</h2>"))
+        for profile in (executive_director, it_head, it_officer, finance_officer):
+            self.assertEqual(html.count(reverse("organization:employee-detail", args=[profile.pk])), 1)
+
+    def test_executive_office_assignment_is_rendered_once_and_not_marked_unplaced(self):
+        from apps.organization.models import EmployeeAssignment
+
+        self.position.title = "Managing Director / Chief Executive Officer"
+        self.position.save(update_fields=["title", "updated_at"])
+        office_position = Position.objects.create(code="P-EXEC-ASST", title="Executive Assistant to MD/CEO")
+        office_user = get_user_model().objects.create_user(username="office-assistant", first_name="Fahd", last_name="Lawan")
+        office_profile = EmployeeProfile.objects.create(
+            user=office_user, staff_id="STAFF-OFFICE", account_status=EmployeeProfile.AccountStatus.ACTIVE,
+        )
+        EmployeeAssignment.objects.create(
+            employee=office_profile, department=self.department, position=office_position,
+            supervisor=self.admin_profile, start_date=timezone.localdate(),
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("organization:structure"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode().count("Fahd Lawan"), 1)
+        self.assertContains(response, 'aria-label="Executive Office reporting to org-admin"')
+        self.assertNotContains(response, "Reporting line not recorded")
+
+    def test_structure_excludes_bootstrap_admin_identity_but_keeps_employee_admins(self):
+        from apps.organization.models import EmployeeBootstrapState
+
+        bootstrap_user = get_user_model().objects.create_user(
+            username="bootstrap-identity", first_name="Technical", last_name="Account",
+        )
+        bootstrap_profile = EmployeeProfile.objects.create(
+            user=bootstrap_user, staff_id="BOOTSTRAP-001",
+            account_status=EmployeeProfile.AccountStatus.ACTIVE,
+        )
+        bootstrap_user.groups.add(Group.objects.get(name="DMS Administrator"))
+        assignment = create_assignment(
+            employee=bootstrap_profile, department=self.department, position=self.position,
+            supervisor=self.admin_profile, start_date=timezone.localdate(), actor=self.admin,
+        )
+        for action in (OrganizationAuditEvent.Action.USER_CREATED, OrganizationAuditEvent.Action.ROLE_CHANGED):
+            OrganizationAuditEvent.objects.create(
+                actor=self.admin, action=action, subject_user=bootstrap_user,
+            )
+        EmployeeBootstrapState.objects.create(completed_at=timezone.now())
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("organization:structure"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("organization:employee-detail", args=[bootstrap_profile.pk]))
+        self.assertContains(response, reverse("organization:employee-detail", args=[self.admin_profile.pk]))
+        self.assertTrue(EmployeeAssignment.objects.filter(pk=assignment.pk).exists())
+
     def test_onboarding_page_creates_new_django_user_without_password(self):
         self.client.force_login(self.admin)
         response = self.client.post(reverse("organization:employee-create"), {
-            "username": "web-onboarded", "first_name": "Web", "last_name": "Employee",
+            "first_name": "Web", "last_name": "Employee",
             "email": "web@example.test", "staff_id": "WEB-001",
             "employment_status": EmployeeProfile.EmploymentStatus.EMPLOYED,
             "account_status": EmployeeProfile.AccountStatus.INACTIVE,
             "department": self.department.pk, "position": self.position.pk,
             "supervisor": "", "start_date": timezone.localdate().isoformat(), "roles": [],
         })
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Employee created successfully.")
+        self.assertContains(response, "Activation not currently available")
         profile = EmployeeProfile.objects.get(staff_id="WEB-001")
         self.assertFalse(profile.user.has_usable_password())
         self.assertFalse(profile.user.is_active)
@@ -455,7 +868,7 @@ class OrganizationManagementTests(TestCase):
             "account_status": self.creator.account_status,
             "department": self.department.pk, "position": self.position.pk,
             "supervisor": self.reviewer.pk, "start_date": "",
-            "roles": [],
+            "roles": [Group.objects.get(name="DMS Standard User").pk],
         })
         self.assertEqual(response.status_code, 403)
         self.assertEqual(self.creator.current_assignment.supervisor, self.reviewer)

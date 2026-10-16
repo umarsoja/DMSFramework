@@ -1,0 +1,3 @@
+{% extends 'layouts/authentication.html' %}
+{% block title %}Activation link unavailable | APGC DMS{% endblock %}
+{% block content %}<section class="apgc-auth-card" aria-labelledby="page-title"><h1 id="page-title">Activation link unavailable</h1><p>This link is invalid, expired, or already used. Contact an APGC DMS administrator for assistance.</p><a class="btn btn-primary w-100" href="{% url 'dms-login' %}">DMS sign in</a></section>{% endblock %}

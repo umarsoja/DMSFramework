@@ -64,7 +64,7 @@ class WorkflowActionFoundationTests(TestCase):
     def test_action_catalog_and_task_fields_support_action_accountability(self):
         self.assertEqual(
             set(WorkflowActionType.objects.values_list("code", flat=True)),
-            {"review", "approve", "acknowledge", "assign", "execute", "respond", "endorse", "issue", "close"},
+            {"review", "approve", "acknowledge", "assign", "execute", "respond", "endorse", "issue", "close", "advise"},
         )
         document = create_memo(owner=self.owner, values=self.values())
         version = document.current_version
@@ -73,6 +73,7 @@ class WorkflowActionFoundationTests(TestCase):
             instance=workflow,
             step=self.step,
             action_type=self.execute_action,
+            submitted_version=version,
             assigned_to=self.assignee,
             assigned_assignment=self.assignment,
             instruction="Prepare the requested commercial quotation.",
@@ -87,6 +88,36 @@ class WorkflowActionFoundationTests(TestCase):
         self.assertIsNone(task.completed_at)
 
     def test_completion_records_response_timestamp_evidence_and_audit(self):
+        target = create_memo(owner=self.owner, values=self.values(subject="Task target"))
+        attachment = Attachment.objects.create(
+            version=target.current_version,
+            file="private_documents/evidence.pdf",
+            original_filename="evidence.pdf",
+            media_type="application/pdf",
+            size=20,
+            uploaded_by=self.owner,
+        )
+        workflow = WorkflowInstance.objects.create(document=target, definition=self.definition)
+        task = WorkflowTask.objects.create(
+            instance=workflow, step=self.step, action_type=self.execute_action,
+            submitted_version=target.current_version,
+            assigned_to=self.assignee, assigned_assignment=self.assignment,
+            instruction="Provide evidence.", cycle=1,
+        )
+        completed = complete_workflow_task(
+            task_id=task.pk, actor=self.assignee,
+            response="Quotation prepared.", evidence_ids=[attachment.pk],
+        )
+        completed.refresh_from_db()
+        self.assertEqual(completed.status, WorkflowTask.Status.COMPLETED)
+        self.assertTrue(completed.completed_at)
+        self.assertEqual(completed.response, "Quotation prepared.")
+        self.assertEqual(list(completed.evidence.all()), [attachment])
+        event = target.audit_events.get(action="TASK_COMPLETED", context__task_id=task.pk)
+        self.assertEqual(event.context["response"], "Quotation prepared.")
+        self.assertEqual(event.context["evidence_attachment_ids"], [attachment.pk])
+
+    def test_task_cannot_link_evidence_from_another_document(self):
         source = create_memo(owner=self.owner, values=self.values(subject="Evidence source"))
         target = create_memo(owner=self.owner, values=self.values(subject="Task target"))
         attachment = Attachment.objects.create(
@@ -100,25 +131,26 @@ class WorkflowActionFoundationTests(TestCase):
         workflow = WorkflowInstance.objects.create(document=target, definition=self.definition)
         task = WorkflowTask.objects.create(
             instance=workflow, step=self.step, action_type=self.execute_action,
-            assigned_to=self.assignee, assigned_assignment=self.assignment,
-            instruction="Provide evidence.", cycle=1,
+            submitted_version=target.current_version,
+            assigned_to=self.assignee, assigned_assignment=self.assignment, cycle=1,
         )
-        completed = complete_workflow_task(
-            task_id=task.pk, actor=self.assignee,
-            response="Quotation prepared.", evidence_ids=[attachment.pk],
-        )
-        completed.refresh_from_db()
-        self.assertEqual(completed.status, WorkflowTask.Status.COMPLETED)
-        self.assertTrue(completed.completed_at)
-        self.assertEqual(completed.response, "Quotation prepared.")
-        self.assertEqual(list(completed.evidence.all()), [attachment])
-        self.assertTrue(target.audit_events.filter(action="TASK_COMPLETED", context__task_id=task.pk).exists())
+
+        with self.assertRaises(ValidationError):
+            complete_workflow_task(
+                task_id=task.pk, actor=self.assignee,
+                response="Evidence belongs to a different document.", evidence_ids=[attachment.pk],
+            )
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, WorkflowTask.Status.PENDING)
+        self.assertFalse(task.evidence.exists())
 
     def test_only_assignee_can_complete_task(self):
         document = create_memo(owner=self.owner, values=self.values())
         workflow = WorkflowInstance.objects.create(document=document, definition=self.definition)
         task = WorkflowTask.objects.create(
             instance=workflow, step=self.step, action_type=self.execute_action,
+            submitted_version=document.current_version,
             assigned_to=self.assignee, assigned_assignment=self.assignment, cycle=1,
         )
         with self.assertRaises(PermissionDenied):

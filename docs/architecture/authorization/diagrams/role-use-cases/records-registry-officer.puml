@@ -1,0 +1,21 @@
+@startuml
+left to right direction
+actor "DMS Records/Registry Officer" as Records
+rectangle "APGC DMS — records lifecycle" {
+  usecase "Archive own finalized Memo\n[CURRENT: owner-only]" as OwnerArchive
+  usecase "Register finalized record\n[FUTURE]" as Register
+  usecase "Manage retention / archival queue\n[FUTURE]" as Retention
+  usecase "Retrieve authorized record\n[FUTURE: explicit scope]" as Retrieve
+  usecase "Disposition / transfer records\n[FUTURE: policy required]" as Disposition
+}
+Records --> OwnerArchive
+Records ..> Register : target registry function
+Records ..> Retention : target records function
+Records ..> Retrieve : target records function
+Records ..> Disposition : target records function
+note bottom of OwnerArchive
+  Archive currently requires document ownership and FINALIZED
+  state. The Registry Officer group does not grant it.
+  No retention schedule, registry, or disposal workflow exists.
+end note
+@enduml

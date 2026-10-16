@@ -1,15 +1,26 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.contrib.auth.forms import SetPasswordForm
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from .models import Department, EmployeeProfile, Position
 
 
+class EligibleExistingAccountField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        name = obj.get_full_name().strip() or obj.get_username()
+        return f"{name} · {obj.get_username()} · {obj.email}"
+
+
 class EmployeeOnboardingForm(forms.Form):
-    existing_user = forms.ModelChoiceField(queryset=get_user_model().objects.none(), required=False, label="Link an existing account", widget=forms.Select(attrs={"class": "form-select"}))
-    username = forms.CharField(max_length=150, required=False, widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "off"}))
+    account_mode = forms.ChoiceField(
+        choices=(("create", "Create a new employee account"), ("link", "Link an existing account")),
+        required=False, initial="create", widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+    )
+    existing_user = EligibleExistingAccountField(queryset=get_user_model().objects.none(), required=False,
+                                                 label="Existing account", widget=forms.Select(attrs={"class": "form-select"}))
     first_name = forms.CharField(max_length=150, required=False, label="First name", widget=forms.TextInput(attrs={"class": "form-control"}))
     last_name = forms.CharField(max_length=150, required=False, label="Last name", widget=forms.TextInput(attrs={"class": "form-control"}))
     email = forms.EmailField(required=False, label="Official email", widget=forms.EmailInput(attrs={"class": "form-control", "autocomplete": "off"}))
@@ -26,7 +37,16 @@ class EmployeeOnboardingForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.actor = actor
         User = get_user_model()
-        self.fields["existing_user"].queryset = User.objects.filter(employee_profile__isnull=True).order_by("last_name", "first_name", "username")
+        # Only offer unlinked, ordinary DMS identities. Never expose Django
+        # staff/superuser accounts or the elevated DMS administrator groups.
+        self.fields["existing_user"].queryset = User.objects.filter(
+            employee_profile__isnull=True, is_staff=False, is_superuser=False, is_active=True,
+            groups__name__startswith="DMS ",
+        ).exclude(groups__name__in=("DMS Administrator", "DMS Workflow Administrator")).distinct().order_by(
+            "last_name", "first_name", "username",
+        )
+        self.fields["existing_user"].help_text = "Only eligible, unlinked DMS accounts are listed. Existing usernames and passwords are preserved."
+        self.fields["email"].help_text = "Use the employee's authoritative work email. An existing account's saved address is retained when linking."
         self.fields["department"].queryset = Department.objects.filter(is_active=True)
         self.fields["position"].queryset = Position.objects.filter(is_active=True).select_related("department")
         self.fields["supervisor"].queryset = EmployeeProfile.objects.filter(
@@ -41,13 +61,30 @@ class EmployeeOnboardingForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        mode = cleaned.get("account_mode") or "create"
+        cleaned["account_mode"] = mode
         existing = cleaned.get("existing_user")
-        if not existing:
-            for field in ("username", "first_name", "last_name"):
+        if mode == "link":
+            if not existing:
+                self.add_error("existing_user", "Select an eligible unlinked account to continue.")
+            elif not existing.email and not cleaned.get("email"):
+                self.add_error("email", "Enter the official email address for this account before activation.")
+        else:
+            if existing:
+                self.add_error("existing_user", "Choose Link an existing account to use this selection.")
+            for field in ("first_name", "last_name"):
                 if not cleaned.get(field):
-                    self.add_error(field, "Enter this value when creating a new account.")
-            if cleaned.get("username") and get_user_model().objects.filter(username=cleaned["username"]).exists():
-                self.add_error("username", "That username is already in use.")
+                    self.add_error(field, "Enter this value when creating a new employee account.")
+            if not cleaned.get("email"):
+                self.add_error("email", "An official email address is required to send the activation link.")
+            elif cleaned.get("email"):
+                matches = get_user_model().objects.filter(email__iexact=cleaned["email"].strip())
+                if matches.exists():
+                    eligible_matches = self.fields["existing_user"].queryset.filter(pk__in=matches.values("pk"))
+                    if matches.count() == 1 and eligible_matches.exists():
+                        self.add_error("email", "An account already uses this email. Choose Link an existing account to continue.")
+                    else:
+                        self.add_error("email", "This email matches existing account records and needs administrator review. No new account was created.")
         if cleaned.get("position") and cleaned.get("department"):
             position = cleaned["position"]
             if position.department_id and position.department_id != cleaned["department"].pk:
@@ -55,6 +92,23 @@ class EmployeeOnboardingForm(forms.Form):
         if existing and existing == self.actor:
             self.add_error("existing_user", "You cannot create an employee profile for yourself.")
         return cleaned
+
+
+class EmployeeActivationForm(SetPasswordForm):
+    """Set the initial password without exposing or generating a reusable password."""
+
+
+class RecoveryEmailForm(forms.Form):
+    email = forms.EmailField(label="Official email", widget=forms.EmailInput(attrs={
+        "class": "form-control", "autocomplete": "email", "required": True,
+    }))
+
+
+class RecoveryPasswordForm(SetPasswordForm):
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(user, *args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "form-control"
 
 
 class EmployeeEditForm(forms.Form):

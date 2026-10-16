@@ -1,0 +1,6 @@
+<article class="org-card" data-role="{{ node.role }}">
+  {% if node.role != 'employee' %}<span class="org-role-label">{% if node.role == 'md' %}Managing Director{% elif node.role == 'ed' %}Executive Director{% elif node.role == 'head' %}Department head{% elif node.role == 'executive-office' %}Executive Office{% endif %}</span>{% endif %}
+  <h2><a href="{{ node.url }}">{{ node.name }}</a></h2>
+  <p class="org-position">{{ node.position|default:'Position not recorded' }}</p>
+  {% if show_department %}<p class="org-department">{{ node.department|default:'Department not recorded' }}</p>{% endif %}
+</article>

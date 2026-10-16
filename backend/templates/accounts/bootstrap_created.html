@@ -1,0 +1,12 @@
+{% extends 'layouts/authentication.html' %}
+{% block title %}Initial administrator provisioned | APGC DMS{% endblock %}
+{% block content %}
+<section class="apgc-auth-card" aria-labelledby="page-title">
+  <h1 id="page-title">First DMS Administrator provisioned</h1>
+  <p>The bootstrap route is now closed.</p>
+  {% if delivery.status == 'SENT' %}<p>The activation email was accepted by the configured email service for {{ profile.user.email }}. Its link expires in 24 hours and can be used once.</p>
+  {% elif delivery.status == 'FAILED' %}<p>The administrator account was created, but the activation email could not be sent. Review the environment configuration and arrange an authorized resend.</p><p class="text-danger">{{ delivery.latest_failure_reason }}</p>
+  {% else %}<p>The activation email is {{ delivery.get_status_display|lower }}.</p>{% endif %}
+  <p class="mb-0">After setting a password, the administrator can sign in through the normal DMS login if the employee assignment and account remain eligible.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,62 @@
+<div class="directory-selector" x-data="{
+  query: '',
+  employees: [],
+  selected: [],
+  init() {
+    this.employees = [...this.$el.querySelectorAll('[data-directory-option]')].map(input => ({
+      id: input.value,
+      label: input.dataset.employeeLabel,
+      search: input.dataset.search,
+    }));
+    this.syncSelection();
+  },
+  syncSelection() {
+    const selectedIds = new Set([...this.$el.querySelectorAll('[data-directory-option]:checked')].map(input => input.value));
+    this.selected = this.employees.filter(employee => selectedIds.has(employee.id));
+  },
+  matches(search) {
+    return !this.query.trim() || search.includes(this.query.trim().toLocaleLowerCase());
+  },
+  hasMatches() {
+    return this.employees.some(employee => this.matches(employee.search));
+  },
+  remove(id) {
+    const input = [...this.$el.querySelectorAll('[data-directory-option]')].find(item => item.value === id);
+    if (input) {
+      input.checked = false;
+      this.syncSelection();
+    }
+  }
+}" x-init="init()">
+  <input class="form-control directory-search" id="{{ widget.attrs.id }}" type="search" autocomplete="off"
+         x-model="query" aria-describedby="{{ widget.attrs.id }}-search-hint">
+  <span id="{{ widget.attrs.id }}-search-hint" class="visually-hidden">Search employees by full name, position, department name or code.</span>
+  <div class="directory-options mt-2" role="group" aria-label="Available employees">
+    <ul class="directory-option-list list-unstyled mb-0">
+      {% for group_name, group_choices, group_index in widget.optgroups %}
+        {% for option in group_choices %}
+          <li class="directory-option" data-search="{{ option.directory_search_text|default:'' }}" x-show="matches($el.dataset.search)">
+            <label for="{{ widget.attrs.id }}-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}" class="directory-option-label">
+              <input type="checkbox" class="form-check-input" name="{{ widget.name }}" value="{{ option.value }}"
+                     id="{{ widget.attrs.id }}-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}"
+                     data-directory-option data-employee-label="{{ option.label }}"
+                     data-search="{{ option.directory_search_text|default:'' }}" {% if option.selected %}checked{% endif %}
+                     @change="syncSelection()">
+              <span>{{ option.label }}</span>
+            </label>
+          </li>
+        {% endfor %}
+      {% endfor %}
+    </ul>
+    <p class="directory-empty text-secondary mb-0" role="status" x-cloak x-show="!hasMatches()">No employees match this search.</p>
+  </div>
+  <div class="directory-selected mt-3" aria-live="polite">
+    <p class="form-hint mb-2">Selected employees</p>
+    <p class="text-secondary mb-0" x-cloak x-show="selected.length === 0">No employees selected.</p>
+    <ul class="directory-selected-list list-unstyled mb-0">
+      <template x-for="employee in selected" :key="employee.id">
+        <li class="directory-chip"><span x-text="employee.label"></span><button type="button" class="directory-chip-remove" @click="remove(employee.id)" :aria-label="'Remove ' + employee.label">Remove</button></li>
+      </template>
+    </ul>
+  </div>
+</div>

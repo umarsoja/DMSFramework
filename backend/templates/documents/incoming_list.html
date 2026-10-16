@@ -1,0 +1,27 @@
+{% extends 'layouts/dms_authenticated.html' %}
+{% block title %}Incoming correspondence | APGC DMS{% endblock %}
+{% block content %}
+<section class="container-xl dms-page" aria-labelledby="page-title">
+  <header class="dms-page-header"><div><p class="eyebrow text-brand">DOCUMENT REGISTER</p><h1 id="page-title">Incoming correspondence</h1><p class="text-secondary">Registered external records visible to your account.</p></div>
+    {% if can_register %}<a class="btn btn-primary" href="{% url 'documents:incoming-register' %}">Register correspondence</a>{% endif %}
+  </header>
+  <form method="get" class="card mb-4"><div class="card-body"><div class="row g-3">
+    <div class="col-md-3"><label class="form-label" for="filter-reference">APGC reference</label><input class="form-control" id="filter-reference" name="reference" value="{{ filters.reference }}"></div>
+    <div class="col-md-3"><label class="form-label" for="filter-sender">Sender</label><input class="form-control" id="filter-sender" name="sender" value="{{ filters.sender }}"></div>
+    <div class="col-md-3"><label class="form-label" for="filter-external">External reference</label><input class="form-control" id="filter-external" name="external_reference" value="{{ filters.external_reference }}"></div>
+    <div class="col-md-3"><label class="form-label" for="filter-subject">Subject</label><input class="form-control" id="filter-subject" name="subject" value="{{ filters.subject }}"></div>
+    <div class="col-md-3"><label class="form-label" for="filter-received">Date received</label><input class="form-control" id="filter-received" type="date" name="received_on" value="{{ filters.received_on }}"></div>
+    <div class="col-md-3"><label class="form-label" for="filter-doc-date">Date on document</label><input class="form-control" id="filter-doc-date" type="date" name="document_date" value="{{ filters.document_date }}"></div>
+    <div class="col-md-3"><label class="form-label" for="filter-office">Receiving office</label><select class="form-select" id="filter-office" name="receiving_office"><option value="">All offices</option>{% for office in offices %}<option value="{{ office.pk }}"{% if selected_office == office.pk|stringformat:'s' %} selected{% endif %}>{{ office.name }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label" for="filter-type">Correspondence type</label><input class="form-control" id="filter-type" name="correspondence_type" value="{{ filters.correspondence_type }}"></div>
+    <div class="col-md-3"><label class="form-label" for="filter-priority">Priority</label><input class="form-control" id="filter-priority" name="priority" value="{{ filters.priority }}"></div>
+    <div class="col-md-3"><label class="form-label" for="filter-classification">Classification</label><select class="form-select" id="filter-classification" name="classification"><option value="">All classifications</option>{% for value,label in classifications %}<option value="{{ value }}"{% if selected_classification == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="col-12 d-flex gap-2"><button class="btn btn-primary" type="submit">Search</button><a class="btn btn-outline-primary" href="{% url 'documents:incoming-list' %}">Clear</a></div>
+  </div></div></form>
+  <div class="table-responsive card"><table class="table table-hover mb-0"><thead><tr><th>APGC reference</th><th>Received</th><th>Sender</th><th>Subject</th><th>Receiving office</th><th>Priority</th><th>Classification</th></tr></thead><tbody>
+    {% for document in page %}{% with content=document.current_version.content %}<tr><td><a href="{% url 'documents:incoming-detail' document.pk %}">{{ document.reference }}</a></td><td>{{ content.received_on }}</td><td>{{ content.sender }}</td><td>{{ document.title }}</td><td>{{ content.receiving_office_name }}</td><td>{{ document.priority_display }}</td><td>{{ document.get_classification_display }}</td></tr>{% endwith %}
+    {% empty %}<tr><td colspan="7" class="text-center text-secondary py-4">No incoming correspondence matches these filters.</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if page.has_other_pages %}<nav class="mt-3" aria-label="Register pages"><ul class="pagination">{% if page.has_previous %}<li class="page-item"><a class="page-link" href="?{% for key,value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&amp;{% endif %}{% endfor %}page={{ page.previous_page_number }}">Previous</a></li>{% endif %}<li class="page-item disabled"><span class="page-link">Page {{ page.number }} of {{ page.paginator.num_pages }}</span></li>{% if page.has_next %}<li class="page-item"><a class="page-link" href="?{% for key,value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value|urlencode }}&amp;{% endif %}{% endfor %}page={{ page.next_page_number }}">Next</a></li>{% endif %}</ul></nav>{% endif %}
+</section>
+{% endblock %}

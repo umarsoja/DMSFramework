@@ -1,0 +1,25 @@
+@startuml
+left to right direction
+actor "DMS Viewer" as Viewer
+rectangle "APGC DMS — read-only access" {
+  usecase "View explicitly granted Memo\n[CURRENT: DocumentAccess.can_view]" as View
+  usecase "Search visible references / titles\n[CURRENT: Memo list only]" as Search
+  usecase "View available versions / activity\n[CURRENT: visible detail]" as History
+  usecase "Preview finalized PDF / supported attachment\n[CURRENT: state + visibility]" as Preview
+  usecase "Download\n[CURRENT: owner or can_view + can_download]" as Download
+  usecase "Create / edit / decide / finalize / archive\n[FUTURE: explicitly denied by Viewer policy]" as Mutate
+  usecase "Assigned workflow decision\n[CURRENT: assignment overrides role label]" as Task
+}
+Viewer --> View
+Viewer --> Search
+Viewer --> History
+Viewer --> Preview
+Viewer --> Download
+Viewer ..> Mutate : target read-only boundary
+Viewer --> Task
+note bottom of Task
+  Viewer membership does not currently enforce read-only.
+  If the user is assigned a pending task, the application
+  currently allows that task decision regardless of role.
+end note
+@enduml

@@ -54,15 +54,16 @@ class DMSAuthenticationAndRoleTests(TestCase):
         response = self.login_to_dms(user)
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response["Location"], reverse("documents:memo-list"))
+        self.assertEqual(response["Location"], reverse("dashboard"))
         self.assertFalse(user.is_staff)
-        workspace = self.client.get(reverse("documents:memo-list"))
+        workspace = self.client.get(reverse("dashboard"))
         self.assertEqual(workspace.status_code, 200)
         self.assertTemplateUsed(workspace, "layouts/dms_authenticated.html")
         self.assertContains(workspace, "Document Management System")
         self.assertContains(workspace, "Internal Memos")
+        self.assertContains(workspace, "My Pending Actions")
         self.assertContains(workspace, "Notifications")
-        self.assertContains(workspace, "No notifications are available.")
+        self.assertContains(workspace, "No new actionable notifications.")
         self.assertContains(workspace, f'action="{reverse("dms-logout")}"')
         self.assertContains(workspace, reverse("account-profile"))
         self.assertContains(workspace, reverse("account-settings"))
@@ -84,7 +85,7 @@ class DMSAuthenticationAndRoleTests(TestCase):
         self.assertNotContains(response, "Quick Links")
         self.assertNotContains(response, "Sign in to your workspace.")
 
-    def test_failed_login_keeps_user_anonymous(self):
+    def test_invalid_password_is_rejected_and_user_remains_anonymous(self):
         user, _ = self.make_employee("invalid-password", "AUTH-014")
 
         response = self.login_to_dms(user, password="incorrect")
@@ -92,6 +93,18 @@ class DMSAuthenticationAndRoleTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Please enter a correct username and password")
         self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_eligible_dms_administrator_can_sign_in(self):
+        user, _ = self.make_employee(
+            "administrator-login", "AUTH-018", role="DMS Administrator",
+            password="test-administrator-password",
+        )
+
+        response = self.login_to_dms(user, password="test-administrator-password")
+
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertEqual(self.client.session.get("_auth_user_id"), str(user.pk))
+        self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)
 
     def test_account_pages_are_dms_protected_and_show_authoritative_profile(self):
         profile_user, profile = self.make_employee("profile-user", "AUTH-015")
@@ -311,7 +324,7 @@ class DMSAuthenticationAndRoleTests(TestCase):
 
     def test_approved_role_groups_receive_only_existing_enforced_permissions(self):
         expected = {
-            "DMS Administrator": {("organization", "manage_roles")},
+            "DMS Administrator": {("organization", "manage_roles"), ("organization", "manage_employees")},
             "DMS Workflow Administrator": {("documents", "reassign_workflow_tasks")},
             "DMS Department Manager/HOD": set(),
             "DMS Document Officer": set(),

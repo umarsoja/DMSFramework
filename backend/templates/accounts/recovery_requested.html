@@ -1,0 +1,3 @@
+{% extends 'layouts/authentication.html' %}
+{% block title %}Request received | APGC DMS{% endblock %}
+{% block content %}<section class="apgc-auth-card" aria-labelledby="page-title"><h1 id="page-title">Request received</h1><p>If the address matches an eligible APGC DMS account, instructions will be sent shortly.</p><p class="mb-0"><a href="{% url 'dms-login' %}">Return to sign in</a></p></section>{% endblock %}

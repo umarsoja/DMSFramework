@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <body style="margin:0;background:#f4f6f8;font-family:Arial,sans-serif;color:#1d2939">
+    <main style="max-width:600px;margin:32px auto;padding:32px;background:#fff;border:1px solid #e4e7ec;border-radius:12px">
+      <p style="margin:0 0 16px;color:#176b5b;font-weight:700;letter-spacing:.08em">APGC DMS</p>
+      <h1 style="font-size:24px;margin:0 0 16px">Your account is ready</h1>
+      <p>Hello {{ employee_name }},</p>
+      <p>Your APGC DMS account has been created. Use the secure link below to set your password.</p>
+      <p style="margin:28px 0"><a href="{{ activation_url }}" style="display:inline-block;padding:12px 20px;background:#176b5b;color:#fff;text-decoration:none;border-radius:6px;font-weight:700">Activate your account</a></p>
+      <p>This link expires in {{ expires_in_hours }} hours and can be used once.</p>
+      <p>If you need help, contact your IT support team through APGC's approved support channel.</p>
+      <p style="margin-top:32px;color:#667085">APGC DMS</p>
+    </main>
+  </body>
+</html>

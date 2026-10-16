@@ -1,0 +1,44 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+actor "DMS Standard User" as Standard
+actor "DMS Department Manager/HOD" as Manager
+actor "DMS Documents Officer" as Docs
+actor "DMS Records/Registry Officer" as Records
+actor "DMS Workflow Administrator" as WorkflowAdmin
+actor "DMS Administrator" as DMSAdmin
+actor "DMS Viewer" as Viewer
+actor "Django superuser\n(account-level; separate)" as Superuser
+rectangle "APGC DMS" {
+  usecase "Create / edit / submit own Memo\n[CURRENT: owner rules; not role-gated]" as Author
+  usecase "Review assigned pending task\n[CURRENT: explicit task assignment]" as Review
+  usecase "View object-authorized documents\n[CURRENT: owner / grant / assignee]" as View
+  usecase "View/download representations\n[CURRENT: object flags + state]" as File
+  usecase "Department document scope\n[FUTURE: policy required]" as DeptScope
+  usecase "Operational documents queue\n[FUTURE]" as Ops
+  usecase "Registry / retention / disposition\n[FUTURE]" as Registry
+  usecase "Workflow configuration / monitoring\n[PARTIAL: Admin config; no role mapping]" as FlowAdmin
+  usecase "DMS-wide role/config governance\n[FUTURE: role policy]" as SystemAdmin
+}
+Standard --> Author
+Standard --> View
+Manager --> Review
+Manager --> DeptScope
+Docs --> Ops
+Docs --> Author
+Records --> Registry
+WorkflowAdmin --> FlowAdmin
+DMSAdmin --> SystemAdmin
+Viewer --> View
+Viewer --> File
+Superuser --> FlowAdmin
+Superuser --> SystemAdmin
+note bottom of View
+  Only the migration-backed DMS group permissions are effective.
+  Other use cases remain controlled by business rules or Django Admin.
+end note
+note bottom of Review
+  Workflow responsibilities (owner, reviewer, decision maker)
+  are document/task-specific and are not permanent roles.
+end note
+@enduml

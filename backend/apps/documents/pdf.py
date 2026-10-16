@@ -30,16 +30,30 @@ def render_memo_pdf(document, *, version=None):
     content = version.content
     buffer = BytesIO()
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle("APGCTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=16,
-                              leading=20, textColor=NAVY, alignment=TA_CENTER, spaceAfter=3 * mm))
-    styles.add(ParagraphStyle("APGCSection", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=10,
-                              leading=13, textColor=NAVY, spaceBefore=4 * mm, spaceAfter=2 * mm))
-    styles.add(ParagraphStyle("APGCBody", parent=styles["BodyText"], fontName="Helvetica", fontSize=10,
-                              leading=15, textColor=TEXT, spaceAfter=3 * mm))
-    styles.add(ParagraphStyle("APGCLabel", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=9,
-                              leading=12, textColor=MUTED))
-    styles.add(ParagraphStyle("APGCValue", parent=styles["BodyText"], fontName="Helvetica", fontSize=9,
-                              leading=12, textColor=TEXT))
+    styles.add(ParagraphStyle(
+        "APGCTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=16,
+        leading=20, textColor=NAVY, alignment=TA_CENTER, spaceAfter=2 * mm,
+    ))
+    styles.add(ParagraphStyle(
+        "APGCSection", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=10.5,
+        leading=14, textColor=NAVY, spaceBefore=5 * mm, spaceAfter=2.5 * mm, keepWithNext=True,
+    ))
+    styles.add(ParagraphStyle(
+        "APGCBody", parent=styles["BodyText"], fontName="Helvetica", fontSize=10,
+        leading=15, textColor=TEXT, spaceAfter=4 * mm,
+    ))
+    styles.add(ParagraphStyle(
+        "APGCLabel", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=9,
+        leading=12, textColor=MUTED,
+    ))
+    styles.add(ParagraphStyle(
+        "APGCValue", parent=styles["BodyText"], fontName="Helvetica", fontSize=9,
+        leading=12.5, textColor=TEXT,
+    ))
+    styles.add(ParagraphStyle(
+        "APGCRecord", parent=styles["BodyText"], fontName="Helvetica", fontSize=9,
+        leading=13.5, textColor=TEXT, spaceAfter=1.5 * mm,
+    ))
 
     def draw_footer(canvas, _doc):
         canvas.saveState()
@@ -73,6 +87,7 @@ def render_memo_pdf(document, *, version=None):
     ])
 
     rows = [
+        ("Memo Reference", document.reference),
         ("Date", document.memo_date.strftime("%d %B %Y")),
         ("From", document.created_by.get_full_name() or document.created_by.get_username()),
         ("Originating department", document.originating_assignment.department_name_snapshot if document.originating_assignment else "—"),
@@ -84,15 +99,15 @@ def render_memo_pdf(document, *, version=None):
         ("Subject", content.get("subject", document.title)),
     ]
     info = [[_plain_paragraph(label, styles["APGCLabel"]), _plain_paragraph(value, styles["APGCValue"])] for label, value in rows]
-    info_table = Table(info, colWidths=[34 * mm, 140 * mm], hAlign="LEFT")
+    info_table = Table(info, colWidths=[43 * mm, 131 * mm], hAlign="LEFT")
     info_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F0F0FA")),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3 * mm),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3 * mm),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5 * mm),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5 * mm),
-        ("LINEBELOW", (0, 0), (-1, -1), .35, LINE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2.8 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2.8 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.2 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.2 * mm),
+        ("LINEBELOW", (0, 0), (-1, -1), .4, LINE),
     ]))
     story.extend([info_table, Paragraph("Memo", styles["APGCSection"])])
     body = content.get("body", "")
@@ -118,10 +133,10 @@ def render_memo_pdf(document, *, version=None):
         approval_context = ""
         if approval.actor_assignment:
             approval_context = f" ({approval.actor_assignment.department_name_snapshot} / {approval.actor_assignment.position_title_snapshot})"
-        story.append(_plain_paragraph(f"Approved by {approval.actor.get_full_name() or approval.actor.get_username()}{approval_context} on {approved_at}.", styles["APGCValue"]))
+        story.append(_plain_paragraph(f"Approved by {approval.actor.get_full_name() or approval.actor.get_username()}{approval_context} on {approved_at}.", styles["APGCRecord"]))
     finalized_at = timezone.localtime(document.finalized_at).strftime("%d %B %Y, %H:%M") if document.finalized_at else "—"
     finalizer = document.finalized_by.get_full_name() or document.finalized_by.get_username() if document.finalized_by else "—"
-    story.append(_plain_paragraph(f"Finalized by {finalizer} on {finalized_at}.", styles["APGCValue"]))
+    story.append(_plain_paragraph(f"Finalized by {finalizer} on {finalized_at}.", styles["APGCRecord"]))
 
     pdf.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
     return buffer.getvalue()

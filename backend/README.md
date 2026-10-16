@@ -91,10 +91,14 @@ attachment storage directory through a static or media web-server route.
   `organization.manage_positions`; DMS Group assignment requires
   `organization.manage_roles`. Pending task reassignment requires
   `documents.reassign_workflow_tasks`.
-- The migrations create the foundation DMS Groups only. They have no
-  permissions assigned by default; an authorized administrator configures
-  Groups with Django permissions. No APGC employee, department, position, or
-  reporting data is seeded.
+- The migrations seed the seven DMS groups. `organization.0007` grants
+  `organization.manage_roles` to DMS Administrator and
+  `documents.reassign_workflow_tasks` to DMS Workflow Administrator;
+  `organization.0008` grants `organization.manage_employees` to DMS
+  Administrator. The migrations do not grant department or position
+  permissions, and do not seed APGC employees, departments, positions, or
+  reporting data. Do not assume other permissions are present or add grants
+  automatically.
 - Workflow steps support selected reviewer, document creator, creator
   supervisor, and department head actor types. The current Internal Memo flow
   still uses an explicitly selected reviewer. Current MVP workflow capability
@@ -135,7 +139,7 @@ deployment procedure before applying migrations to production.
 
 ```sh
 python manage.py check
-python manage.py test tests --settings=config.settings.testing
+python scripts/run_tests.py
 python manage.py collectstatic --noinput
 ```
 

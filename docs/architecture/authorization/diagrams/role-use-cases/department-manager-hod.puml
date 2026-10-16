@@ -1,0 +1,21 @@
+@startuml
+left to right direction
+actor "DMS Department Manager/HOD" as Manager
+rectangle "APGC DMS — department responsibility" {
+  usecase "Review assigned task\n[CURRENT: task assignment, not role]" as AssignedReview
+  usecase "Resolve department head actor\n[CURRENT: if workflow step selects it]" as DeptHead
+  usecase "View eligible department documents\n[FUTURE: policy + classification scope]" as DeptView
+  usecase "Monitor department pending actions\n[FUTURE]" as Queue
+  usecase "Manage delegated department actions\n[FUTURE: explicit authorization]" as Manage
+}
+Manager --> AssignedReview
+Manager --> DeptHead
+Manager ..> DeptView : target behavior
+Manager ..> Queue : target behavior
+Manager ..> Manage : target behavior
+note bottom of DeptView
+  Department membership or headship does not currently
+  grant document visibility. Combine DMS role, current
+  assignment, ownership/task/grant, and classification.
+end note
+@enduml

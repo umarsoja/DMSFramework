@@ -1,7 +1,7 @@
 <footer class="footer tf-footer apgc-footer"><div class="container-xl">
   <div class="row g-4 pb-5">
     <div class="col-lg-7"><a class="navbar-brand mb-3" href="{% url 'home' %}">{% include 'partials/brand.html' %}</a><p class="footer-product">Document Management System</p><p class="text-secondary small">A central workspace for APGC organisational documents.</p></div>
-    <nav class="col-6 col-lg-3" aria-label="Quick links"><h2 class="footer-heading">Quick Links</h2><ul class="footer-links"><li><a href="{% url 'home' %}#platform">Overview</a></li><li><a href="{% url 'home' %}#capabilities">Capabilities</a></li><li><a href="{% url 'admin:login' %}">Sign in</a></li></ul></nav>
+    <nav class="col-6 col-lg-3" aria-label="Quick links"><h2 class="footer-heading">Quick Links</h2><ul class="footer-links"><li><a href="{% url 'home' %}#platform">Overview</a></li><li><a href="{% url 'home' %}#capabilities">Capabilities</a></li><li><a href="{% url 'dms-login' %}">Sign in</a></li></ul></nav>
   </div>
   <div class="footer-bottom"><span>&copy; {% now 'Y' %} Alliance Power Generation Company</span><a href="{% url 'home' %}#platform">Back to top ↑</a></div>
 </div></footer>

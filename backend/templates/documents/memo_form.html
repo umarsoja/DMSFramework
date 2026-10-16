@@ -9,12 +9,12 @@
     <div><dt>From</dt><dd>{{ document.created_by.get_full_name|default:document.created_by.get_username }}</dd></div><div><dt>Status</dt><dd>{% include 'components/document_status.html' with status=document.status display=document.get_status_display only %}</dd></div>
   </div></section>{% else %}<p class="form-note"><strong>Reference, date, and sender</strong> are assigned automatically when the memo is saved.</p>{% endif %}
 
-  <form method="post" enctype="multipart/form-data" class="card memo-form" novalidate>
+  <form method="post" enctype="multipart/form-data" class="card memo-form" novalidate data-document-reference="{{ document.reference|default:'New memo'|escape }}" data-document-title="{{ document.title|default:'new memo'|escape }}" x-data="{ confirmed: false, confirmationTitle: '', confirmationMessage: '', confirmationLabel: '', submitterName: '', submitterValue: '' }" x-ref="actionForm" @submit="if ($event.submitter?.name === 'action' && $event.submitter?.value === 'submit' && !confirmed) { $event.preventDefault(); submitterName = $event.submitter.name; submitterValue = $event.submitter.value; confirmationTitle = `Submit ${$el.dataset.documentTitle} for review?`; confirmationMessage = `You are about to submit ${$el.dataset.documentReference} for workflow review. The current version will become the submitted version and the memo will move to Under review.`; confirmationLabel = 'Submit for review'; $refs.confirmationDialog.showModal(); }">
     {% csrf_token %}<div class="card-body">
       {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
       <div class="memo-form-grid">
         {% for field in form %}
-          {% if field.name == 'revision_note' and document.status != 'RETURNED' %}{% elif field.name == 'reviewer' %}
+          {% if field.name == 'remove_attachments' %}{% elif field.name == 'revision_note' and document.status != 'RETURNED' %}{% elif field.name == 'reviewer' and not form.show_reviewer_selector %}{% elif field.name == 'reviewer' %}
             <div class="memo-field memo-field-wide{% if field.errors %} has-error{% endif %}"><label class="form-label" for="{{ field.id_for_label }}">Reviewer{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>{{ field }}{% if field.help_text %}<div class="form-hint">{{ field.help_text }}</div>{% endif %}{% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>
           {% else %}
             <div class="memo-field{% if field.name == 'body' or field.name == 'attachments' or field.name == 'revision_note' %} memo-field-wide{% endif %}{% if field.errors %} has-error{% endif %}">
@@ -27,7 +27,9 @@
           {% endif %}
         {% endfor %}
       </div>
+      {% if document and form.remove_attachments.field.choices %}<fieldset class="memo-field memo-field-wide existing-attachments"><legend class="form-label">{{ form.remove_attachments.label }}</legend><p class="form-hint">Selected files remain on the current version but will be omitted from the new version.</p>{{ form.remove_attachments }}{% for error in form.remove_attachments.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</fieldset>{% endif %}
       <div class="memo-form-actions"><a class="btn btn-outline-primary" href="{% if document %}{% url 'documents:memo-detail' document.pk %}{% else %}{% url 'documents:memo-list' %}{% endif %}">Cancel</a><button class="btn btn-outline-primary" type="submit" name="action" value="save">Save draft</button><button class="btn btn-primary" type="submit" name="action" value="submit">{% if document.status == 'RETURNED' %}Resubmit for review{% else %}Submit for review{% endif %}</button></div>
+      {% include 'components/action_confirmation_dialog.html' with dialog_id='memo-submit-confirm' dialog_title='Submit this memo for review?' dialog_message='Once submitted, the current version will become the submitted workflow version.' confirm_label='Submit for review' dialog_dynamic_action=True only %}
     </div>
   </form>
 </section>

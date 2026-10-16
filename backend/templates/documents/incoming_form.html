@@ -1,0 +1,94 @@
+{% extends 'layouts/dms_authenticated.html' %}
+{% block title %}{{ page_title }} | APGC DMS{% endblock %}
+{% block content %}
+<section class="container-xl dms-page" aria-labelledby="page-title">
+  <header class="dms-page-header dms-page-header-compact">
+    <div>
+      <p class="eyebrow text-brand">INCOMING CORRESPONDENCE</p>
+      <h1 id="page-title">{{ page_title }}</h1>
+      <p class="text-secondary">Register the received record and its original file in the DMS.</p>
+    </div>
+  </header>
+
+  <form method="post" enctype="multipart/form-data" class="card memo-form incoming-form" novalidate data-document-title="{{ form.subject.value|default:''|escape }}" x-data="{ confirmed: false, correspondenceType: '', confirmationTitle: '', confirmationMessage: '', confirmationLabel: '', submitterName: '', submitterValue: '' }" x-ref="actionForm" @submit="if (!confirmed) { $event.preventDefault(); const sender = $el.querySelector('[name=sender]')?.value.trim() || 'the selected sender'; const subject = $el.querySelector('[name=subject]')?.value.trim() || 'the entered subject'; const office = $el.querySelector('[name=receiving_office]')?.selectedOptions[0]?.textContent.trim() || 'the selected receiving office'; confirmationTitle = 'Register incoming correspondence?'; confirmationMessage = `You are about to register '${subject}' from ${sender} with ${office}. A new DMS correspondence record will be created.`; confirmationLabel = 'Register Correspondence'; submitterName = $event.submitter?.name || ''; submitterValue = $event.submitter?.value || ''; $refs.confirmationDialog.showModal(); }">
+    {% csrf_token %}
+    <div class="card-body">
+      {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+
+      <section class="incoming-form-section" aria-labelledby="correspondence-details-heading">
+        <header class="incoming-form-section-heading">
+          <span class="incoming-form-section-number" aria-hidden="true">01</span>
+          <div><h2 id="correspondence-details-heading">Correspondence Details</h2><p>Record the sender and the key details shown on the correspondence.</p></div>
+        </header>
+        <div class="memo-form-grid">
+          {% for field in form %}
+            {% if field.name == 'sender' or field.name == 'external_reference' or field.name == 'subject' or field.name == 'correspondence_type' or field.name == 'other_correspondence_type' or field.name == 'document_date' or field.name == 'received_on' or field.name == 'priority' %}
+              {% if field.name == 'other_correspondence_type' %}
+                <div id="other-correspondence-type-field" class="memo-field{% if field.errors %} has-error{% endif %}" x-cloak x-show="correspondenceType === 'OTHER'">
+                  <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }} <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required when Others is selected</span></label>
+                  {{ field }}
+                  {% if field.help_text %}<div class="form-hint">{{ field.help_text }}</div>{% endif %}
+                  {% for error in field.errors %}<div class="invalid-feedback d-block" role="alert">{{ error }}</div>{% endfor %}
+                </div>
+              {% else %}
+              <div class="memo-field{% if field.name == 'sender' or field.name == 'subject' %} memo-field-wide{% endif %}{% if field.name == 'external_reference' %} incoming-field-reference{% endif %}{% if field.name == 'document_date' or field.name == 'received_on' %} incoming-field-date{% endif %}{% if field.errors %} has-error{% endif %}">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span>{% endif %}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-hint">{{ field.help_text }}</div>{% endif %}
+                {% if field.name == 'correspondence_type' %}<div class="form-hint">Select a category. Choose Others to specify a category not listed.</div>{% endif %}
+                {% for error in field.errors %}<div class="invalid-feedback d-block" role="alert">{{ error }}</div>{% endfor %}
+              </div>
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="incoming-form-section" aria-labelledby="routing-classification-heading">
+        <header class="incoming-form-section-heading">
+          <span class="incoming-form-section-number" aria-hidden="true">02</span>
+          <div><h2 id="routing-classification-heading">Routing &amp; Classification</h2><p>Choose the receiving office and apply the appropriate access classification.</p></div>
+        </header>
+        <div class="memo-form-grid">
+          {% for field in form %}
+            {% if field.name == 'receiving_office' or field.name == 'classification' %}
+              <div class="memo-field{% if field.name == 'receiving_office' %} memo-field-wide{% endif %}{% if field.errors %} has-error{% endif %}">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span>{% endif %}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-hint">{{ field.help_text }}</div>{% endif %}
+                {% for error in field.errors %}<div class="invalid-feedback d-block" role="alert">{{ error }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="incoming-form-section" aria-labelledby="documents-heading">
+        <header class="incoming-form-section-heading">
+          <span class="incoming-form-section-number" aria-hidden="true">03</span>
+          <div><h2 id="documents-heading">Documents</h2><p>Attach the received original and any supporting files.</p></div>
+        </header>
+        <div class="memo-form-grid">
+          {% for field in form %}
+            {% if field.name == 'original_document' or field.name == 'supporting_documents' %}
+              <div class="memo-field memo-field-wide{% if field.errors %} has-error{% endif %}">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="required-mark" aria-hidden="true">*</span><span class="visually-hidden"> required</span>{% endif %}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-hint">{{ field.help_text }}</div>{% endif %}
+                {% if field.name == 'original_document' %}<div class="form-hint">This file is stored on the first immutable document version. Supporting files remain attachments to that same version.</div>{% endif %}
+                {% for error in field.errors %}<div class="invalid-feedback d-block" role="alert">{{ error }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+
+      <div class="memo-form-actions">
+        <a class="btn btn-outline-primary" href="{% url 'documents:incoming-list' %}">Cancel</a>
+        <button class="btn btn-primary" type="submit">Register Correspondence</button>
+      </div>
+      {% include 'components/action_confirmation_dialog.html' with dialog_id='incoming-register-confirm' dialog_title='Register incoming correspondence?' dialog_message='A new DMS correspondence record will be created and routed to its designated receiving-office manager.' confirm_label='Register Correspondence' dialog_dynamic_action=True only %}
+    </div>
+  </form>
+</section>
+{% endblock %}

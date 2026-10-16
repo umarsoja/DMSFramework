@@ -1,9 +1,214 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/dms_authenticated.html' %}
 {% block title %}{{ page_title }} | APGC DMS{% endblock %}
 {% block content %}
-<section class="container-xl dms-page" aria-labelledby="page-title"><header class="dms-page-header dms-page-header-compact"><div><p class="eyebrow text-brand">IDENTITY & ORGANISATION</p><h1 id="page-title">{{ page_title }}</h1><p class="text-secondary">Account identity, employment, system access and organisational placement are managed separately.</p></div></header>
-<form method="post" class="card memo-form" novalidate>{% csrf_token %}<div class="card-body">{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
-{% if not profile %}<h2 class="h3 mb-3">Account identity</h2><div class="row g-3 mb-4">{% for field in form %}{% if field.name == 'existing_user' or field.name == 'username' or field.name == 'first_name' or field.name == 'last_name' or field.name == 'email' %}<div class="col-12 col-md-6"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>{% endif %}{% endfor %}</div><p class="form-hint">A new account is created with an unusable password. Set up credentials through the approved account process. No password is generated or emailed here.</p>{% endif %}
-<h2 class="h3 mb-3">Employee and current assignment</h2><div class="row g-3">{% for field in form %}{% if profile or field.name not in 'existing_user username first_name last_name email' %}{% if field.name != 'existing_user' and field.name != 'username' and field.name != 'first_name' and field.name != 'last_name' and field.name != 'email' %}<div class="col-12{% if field.name == 'roles' %} col-md-6{% else %} col-md-6{% endif %}"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>{{ field }}{% if field.name == 'roles' %}<div class="form-hint">DMS roles use Django Groups. Position and department do not grant permissions.</div>{% endif %}{% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>{% endif %}{% endif %}{% endfor %}</div>
-<div class="memo-form-actions"><a class="btn btn-outline-primary" href="{% if profile %}{% url 'organization:employee-detail' profile.pk %}{% else %}{% url 'organization:employee-list' %}{% endif %}">Cancel</a><button class="btn btn-primary" type="submit">Save employee record</button></div></div></form></section>
+<section class="container-xl dms-page" aria-labelledby="page-title">
+  <header class="dms-page-header dms-page-header-compact">
+    <div>
+      <p class="eyebrow text-brand">IDENTITY &amp; ORGANISATION</p>
+      <h1 id="page-title">{{ page_title }}</h1>
+      <p class="text-secondary">Account identity, employment, system access and organisational placement are managed separately.</p>
+    </div>
+  </header>
+
+  {% if profile and can_resend_activation %}
+  <section class="card mb-3" aria-labelledby="activation-action-title">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+      <div>
+        <h2 class="h4 mb-1" id="activation-action-title">Initial password setup</h2>
+        <p class="text-secondary mb-0">Latest delivery: {% if latest_activation_delivery %}<strong>{{ latest_activation_delivery.get_status_display }}</strong>{% else %}No activation email recorded{% endif %}</p>
+      </div>
+      <form method="post" action="{% url 'organization:employee-resend-activation' profile.pk %}" data-confirm-kind="resend-activation" data-record-email="{{ profile.user.email|escape }}" x-data="recordConfirmation()" x-ref="actionForm" @submit="confirmSubmit($event)">
+        {% csrf_token %}
+        <button class="btn btn-outline-primary" type="submit">Send a fresh activation email</button>
+        {% include 'components/action_confirmation_dialog.html' with dialog_id='employee-edit-resend-activation-confirm' dialog_title='Send a fresh activation email?' dialog_message='The previous activation link will be invalidated and a fresh link will be sent to this employee.' confirm_label='Send Activation Email' dialog_dynamic_action=True only %}
+      </form>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if not profile %}
+  <div x-data="employeeOnboardingWizard({initialStep: {{ wizard_initial_step|default:1 }}, accountMode: '{{ wizard_mode|default:'create' }}'})" @wizard-next="next()" @wizard-back="back()" @wizard-step="goTo($event.detail)">
+    <ol class="employee-wizard-progress" aria-label="Employee onboarding steps">
+      <template x-for="item in steps" :key="item.number">
+        <li :class="{'is-current': currentStep === item.number, 'is-complete': currentStep > item.number}">
+          <button type="button" @click="goTo(item.number)" :disabled="item.number > currentStep + 1" :aria-current="currentStep === item.number ? 'step' : null" :aria-label="`Step ${item.number}: ${item.title}`">
+            <span class="employee-wizard-step-number" aria-hidden="true" x-text="currentStep > item.number ? '✓' : item.number"></span>
+            <span class="employee-wizard-step-title" x-text="item.title"></span>
+          </button>
+        </li>
+      </template>
+    </ol>
+    <p class="visually-hidden" aria-live="polite" x-text="`Step ${currentStep} of 3`"></p>
+
+    <form id="employee-onboarding-form" method="post" class="card memo-form employee-onboarding-wizard" novalidate data-confirm-kind="employee" data-confirm-mode="create" x-data="recordConfirmation()" x-ref="actionForm" @input="recordChange($event.target)" @change="recordChange($event.target)" @submit="confirmSubmit($event)">
+      {% csrf_token %}
+      <div class="card-body">
+        {% if form.errors %}
+        <div class="alert alert-danger employee-wizard-error-summary" role="alert" aria-labelledby="onboarding-error-title">
+          <h2 id="onboarding-error-title" class="h4">Please correct the following</h2>
+          {% if form.non_field_errors %}<div>{{ form.non_field_errors }}</div>{% endif %}
+          <ul>{% for field in form %}{% for error in field.errors %}<li><strong>{{ field.label }}:</strong> {{ error }}</li>{% endfor %}{% endfor %}</ul>
+          <p class="mb-0">Your entered values are retained. Correct the highlighted fields and continue.</p>
+        </div>
+        {% endif %}
+
+        <section data-wizard-step="1" x-show="currentStep === 1" aria-labelledby="onboarding-step-1-title">
+          <p class="eyebrow text-brand">STEP 1 OF 3</p>
+          <h2 id="onboarding-step-1-title" class="h3">Account identity</h2>
+          <p class="text-secondary">Create a new employee account or link an eligible, unlinked DMS account.</p>
+          {% if form.account_mode.errors %}<div class="invalid-feedback d-block">{{ form.account_mode.errors }}</div>{% endif %}
+          <fieldset class="mb-4">
+            <legend class="form-label">Account mode <span aria-hidden="true">*</span></legend>
+            <label class="employee-account-mode-option">
+              <input type="radio" class="form-check-input" name="account_mode" value="create" x-model="accountMode" {% if wizard_mode != 'link' %}checked{% endif %} @change="document.querySelector('#employee-onboarding-form [name=existing_user]').value = ''">
+              <span><strong>Create a new employee account</strong><small>Generate a username from the employee's name.</small></span>
+            </label>
+            <label class="employee-account-mode-option">
+              <input type="radio" class="form-check-input" name="account_mode" value="link" x-model="accountMode" {% if wizard_mode == 'link' %}checked{% endif %}>
+              <span><strong>Link an existing account</strong><small>Keep its current username, password and saved email address.</small></span>
+            </label>
+          </fieldset>
+
+          <div class="row g-3" x-show="accountMode === 'create'">
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }} <span aria-hidden="true">*</span></label>
+              {{ form.first_name }}
+              <p id="onboarding-client-error-first_name" class="form-hint text-danger mb-0" hidden role="alert"></p>
+              {% for error in form.first_name.errors %}<div id="onboarding-error-first_name" class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label" for="{{ form.last_name.id_for_label }}">{{ form.last_name.label }} <span aria-hidden="true">*</span></label>
+              {{ form.last_name }}
+              <p id="onboarding-client-error-last_name" class="form-hint text-danger mb-0" hidden role="alert"></p>
+              {% for error in form.last_name.errors %}<div id="onboarding-error-last_name" class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-12">
+              <div class="employee-username-preview" aria-live="polite">
+                <span class="form-label mb-1">Generated username preview</span>
+                <code x-text="usernamePreview()">employee</code>
+                <small>Preview only; the server assigns the final unique username when saving.</small>
+              </div>
+              <p class="form-hint mb-0">Username is generated automatically. The employee will establish their password through a secure activation link.</p>
+            </div>
+          </div>
+
+          <div class="row g-3" x-show="accountMode === 'link'">
+            <div class="col-12">
+              <label class="form-label" for="{{ form.existing_user.id_for_label }}">{{ form.existing_user.label }} <span aria-hidden="true">*</span></label>
+              {{ form.existing_user }}
+              <p id="onboarding-client-error-existing_user" class="form-hint text-danger mb-0" hidden role="alert"></p>
+              {% if form.existing_user.help_text %}<div class="form-hint">{{ form.existing_user.help_text }}</div>{% endif %}
+              {% for error in form.existing_user.errors %}<div id="onboarding-error-existing_user" class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-12">
+              <label class="form-label" for="{{ form.email.id_for_label }}">Official email <span x-show="accountMode === 'create'" aria-hidden="true">*</span><span class="text-secondary" x-show="accountMode === 'link'">(only if the account has none)</span></label>
+              {{ form.email }}
+              <p id="onboarding-client-error-email" class="form-hint text-danger mb-0" hidden role="alert"></p>
+              {% if form.email.help_text %}<div class="form-hint">{{ form.email.help_text }}</div>{% endif %}
+              {% for error in form.email.errors %}<div id="onboarding-error-email" class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+        </section>
+
+        <section data-wizard-step="2" x-show="currentStep === 2" aria-labelledby="onboarding-step-2-title">
+          <p class="eyebrow text-brand">STEP 2 OF 3</p>
+          <h2 id="onboarding-step-2-title" class="h3">Organisation and access</h2>
+          <p class="text-secondary">A department or position does not grant DMS permissions. Access comes only from the selected DMS roles.</p>
+          <div class="row g-3">
+            {% for field in form %}{% if field.name == 'staff_id' or field.name == 'employment_status' or field.name == 'account_status' or field.name == 'department' or field.name == 'position' or field.name == 'supervisor' or field.name == 'start_date' or field.name == 'roles' %}
+            <div class="col-12{% if field.name == 'roles' %} col-md-6{% else %} col-md-6{% endif %}">
+              <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>
+              {{ field }}
+              <p id="onboarding-client-error-{{ field.name }}" class="form-hint text-danger mb-0" hidden role="alert"></p>
+              {% if field.help_text %}<div class="form-hint">{{ field.help_text }}</div>{% endif %}
+              {% for error in field.errors %}<div id="onboarding-error-{{ field.name }}" class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            {% endif %}{% endfor %}
+          </div>
+        </section>
+
+        <section data-wizard-step="3" x-show="currentStep === 3" aria-labelledby="onboarding-step-3-title">
+          <p class="eyebrow text-brand">STEP 3 OF 3</p>
+          <h2 id="onboarding-step-3-title" class="h3">Review and onboard</h2>
+          <p class="text-secondary">Review the identity, assignment and access details before saving.</p>
+          <div class="employee-onboarding-review-grid">
+            <section class="employee-review-card" aria-labelledby="review-identity-title">
+              <header><span class="tf-icon ti ti-user-circle" aria-hidden="true"></span><h3 id="review-identity-title">Employee identity</h3></header>
+              <dl>
+                <div><dt>Full name</dt><dd x-text="employeeName()"></dd></div>
+                <div><dt>Official email</dt><dd x-text="accountEmail()"></dd></div>
+                <div><dt>Username</dt><dd><code x-text="accountUsername()"></code></dd></div>
+                <div><dt>Account mode</dt><dd x-text="accountModeLabel()"></dd></div>
+              </dl>
+              <button class="btn btn-sm btn-outline-primary" type="button" @click="$dispatch('wizard-step', 1)">Edit Identity</button>
+            </section>
+
+            <section class="employee-review-card" aria-labelledby="review-organisation-title">
+              <header><span class="tf-icon ti ti-sitemap" aria-hidden="true"></span><h3 id="review-organisation-title">Organisation and assignment</h3></header>
+              <dl>
+                <div><dt>Staff ID</dt><dd x-text="value('staff_id')"></dd></div>
+                <div><dt>Department</dt><dd x-text="selectedLabel('department')"></dd></div>
+                <div><dt>Position</dt><dd x-text="selectedLabel('position')"></dd></div>
+                <div><dt>Supervisor</dt><dd x-text="selectedLabel('supervisor', 'Not assigned')"></dd></div>
+                <div><dt>Employment status</dt><dd x-text="selectedLabel('employment_status')"></dd></div>
+                <div><dt>DMS account status</dt><dd x-text="selectedLabel('account_status')"></dd></div>
+                <div><dt>Assignment effective date</dt><dd x-text="assignmentDate()"></dd></div>
+              </dl>
+              <button class="btn btn-sm btn-outline-primary" type="button" @click="$dispatch('wizard-step', 2)">Edit Organisation</button>
+            </section>
+
+            <section class="employee-review-card employee-review-card-access" aria-labelledby="review-access-title">
+              <header><span class="tf-icon ti ti-shield-check" aria-hidden="true"></span><h3 id="review-access-title">Access and activation</h3></header>
+              <dl>
+                <div class="employee-review-roles"><dt>Selected DMS roles</dt><dd>
+                  <template x-for="role in selectedItems('roles')" :key="role.value"><span class="employee-review-role-badge" x-text="role.label"></span></template>
+                  <span class="text-secondary" x-show="selectedItems('roles').length === 0">No DMS roles selected</span>
+                </dd></div>
+                <div><dt>Initial credential status</dt><dd x-text="accountMode === 'link' ? 'Existing credentials remain unchanged.' : 'No password is set; employee establishes it through activation.'"></dd></div>
+                <div><dt>Activation method</dt><dd>Secure, expiring activation link; existing account eligibility checks apply.</dd></div>
+                <div><dt>Automatic activation email</dt><dd>The existing onboarding service queues email only when the saved account passes activation eligibility checks.</dd></div>
+              </dl>
+              <p class="form-hint mb-0">At least one eligible DMS role is needed for account activation and access. Role assignment remains subject to your permissions.</p>
+            </section>
+          </div>
+          <p class="form-hint mt-3">Saving creates the employee, assignment and selected role mappings atomically. Server-side validation remains authoritative.</p>
+        </section>
+
+        <div class="employee-wizard-actions">
+          <a class="btn btn-outline-primary" href="{% url 'organization:employee-list' %}">Cancel</a>
+          <button class="btn btn-outline-primary" type="button" x-show="currentStep > 1" @click="$dispatch('wizard-back')">Back</button>
+          <button class="btn btn-primary" type="button" x-show="currentStep < 3" @click="$dispatch('wizard-next')">Next</button>
+          <button class="btn btn-primary" type="submit" x-show="currentStep === 3" :disabled="$el.form?.dataset.confirmationSubmitting === 'true'">Save Employee</button>
+        </div>
+        {% include 'components/action_confirmation_dialog.html' with dialog_id='employee-record-confirm' dialog_title='Confirm employee changes' dialog_message='Review the employee record changes before saving.' confirm_label='Create Employee' dialog_dynamic_action=True only %}
+      </div>
+    </form>
+  </div>
+  {% else %}
+  <form method="post" class="card memo-form" novalidate data-confirm-kind="employee" data-confirm-mode="update" data-record-name="{{ profile.user.get_full_name|default:profile.user.username|escape }}" data-initial-account-status="{{ profile.account_status }}" x-data="recordConfirmation()" x-ref="actionForm" @input="recordChange($event.target)" @change="recordChange($event.target)" @submit="confirmSubmit($event)">
+    {% csrf_token %}
+    <div class="card-body">
+      {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+      <h2 class="h3 mb-3">Employee and current assignment</h2>
+      <div class="row g-3">
+        {% for field in form %}{% if field.name != 'existing_user' and field.name != 'account_mode' and field.name != 'first_name' and field.name != 'last_name' and field.name != 'email' %}
+        <div class="col-12 col-md-6">
+          <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>
+          {{ field }}
+          {% if field.name == 'roles' %}<div class="form-hint">DMS roles use Django Groups. Position and department do not grant permissions.</div>{% endif %}
+          {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+      <div class="memo-form-actions">
+        <a class="btn btn-outline-primary" href="{% url 'organization:employee-detail' profile.pk %}">Cancel</a>
+        <button class="btn btn-primary" type="submit">Save Changes</button>
+      </div>
+      {% include 'components/action_confirmation_dialog.html' with dialog_id='employee-record-confirm' dialog_title='Confirm employee changes' dialog_message='Review the employee record changes before saving.' confirm_label='Save Changes' dialog_dynamic_action=True only %}
+    </div>
+  </form>
+  {% endif %}
+</section>
 {% endblock %}
