@@ -582,13 +582,19 @@ class EmailOutbox(models.Model):
     class Status(models.TextChoices):
         QUEUED = "QUEUED", "Queued"
         PROCESSING = "PROCESSING", "Processing"
-        SENT = "SENT", "SMTP accepted"
+        SENT = "SENT", "Provider accepted"
         FAILED = "FAILED", "Failed"
+
+    class DeliveryProvider(models.TextChoices):
+        SMTP = "smtp", "SMTP"
+        ZOHO_API = "zoho_api", "Zoho Mail API"
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="dms_email_deliveries",
     )
     message_type = models.CharField(max_length=32, choices=MessageType.choices)
+    delivery_provider = models.CharField(max_length=16, choices=DeliveryProvider.choices, default=DeliveryProvider.SMTP)
+    automatic_retry_enabled = models.BooleanField(default=False)
     source_reference = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.QUEUED)
     queued_at = models.DateTimeField(default=timezone.now, editable=False)
@@ -605,3 +611,21 @@ class EmailOutbox(models.Model):
 
     def __str__(self):
         return f"{self.get_message_type_display()} to user {self.recipient_id} ({self.status})"
+
+
+class ZohoMailCredential(models.Model):
+    """Encrypted OAuth material for the configured Zoho Mail account."""
+
+    singleton = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    refresh_token = models.TextField()
+    access_token = models.TextField(blank=True)
+    access_token_expires_at = models.DateTimeField(null=True, blank=True)
+    connected_at = models.DateTimeField(default=timezone.now, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        default_permissions = ()
+
+    def save(self, *args, **kwargs):
+        self.singleton = 1
+        super().save(*args, **kwargs)

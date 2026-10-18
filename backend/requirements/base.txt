@@ -1,6 +1,7 @@
 asgiref==3.12.1
 brotli==1.2.0
 cffi==2.1.1
+cryptography==46.0.3
 cssselect2==0.10.1
 Django==6.1.1
 django-environ==0.14.0

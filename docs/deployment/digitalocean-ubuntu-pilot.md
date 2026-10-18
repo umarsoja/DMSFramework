@@ -49,6 +49,48 @@ values. The Nginx template overwrites `X-Forwarded-Proto`, so it pairs with
 proxy. Preserve HTTPS redirect, secure session/CSRF cookies, and initial
 300-second HSTS. HSTS subdomain inclusion and preload remain disabled.
 
+### Zoho Mail API delivery (optional)
+
+SMTP remains the default. To use the HTTPS API, set
+`EMAIL_DELIVERY_PROVIDER=zoho_api` and provide the Zoho OAuth client values,
+the exact registered callback URI, `ZOHO_MAIL_ACCOUNT_ID`, API base URL and a
+new Fernet key in the protected environment file. Generate the Fernet key
+once with `/opt/apgc-dms/venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`; keep it in the secret manager
+and `/etc/apgc-dms/apgc-dms.env` mode `0600`. The callback is available only to
+an authenticated DMS Administrator with `organization.manage_roles` and uses
+PKCE, a single-use ten-minute state and the least-privilege
+`ZohoMail.messages.CREATE` scope.
+
+After changing provider settings, restart the application service and run the
+connection flow from `/integrations/zoho/connect/`. Verify the callback result
+and inspect only sanitized service logs. Tokens are encrypted in the DMS
+database; they are never printed, placed in audit context, or returned to the
+browser. To rotate the Fernet key, disable the outbox timer, take a protected
+database backup, decrypt and re-encrypt the credential row with the old and new
+keys using a one-time administrative script, replace the environment key,
+restart the service, and verify one sink delivery before re-enabling the timer.
+If the old key is lost, revoke the Zoho connection, generate a new key, and
+authorize again; ciphertext cannot be recovered without the old key.
+
+The outbox timer is the only production delivery path:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable apgc-dms-outbox.timer
+sudo systemctl start apgc-dms-outbox.timer
+sudo systemctl status apgc-dms-outbox.timer
+sudo journalctl -u apgc-dms-outbox.service -n 100 --no-pager
+```
+
+For rollback, stop and disable the timer, restore the previous environment
+provider value, restart `apgc-dms.service`, and inspect queued records before
+re-enabling delivery. Existing `EmailOutbox` rows retain their original
+provider and status; migrations do not resend SMTP-accepted, failed, or
+superseded rows. Handle legacy SMTP-queued rows only through an explicit,
+audited operator procedure: review eligibility and token freshness, select the
+specific row, and invoke the existing single-record delivery service. Do not
+run a batch retry during provider migration.
+
 Install OS dependencies and prepare the application from the clean checkout:
 
 ```bash

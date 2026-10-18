@@ -41,9 +41,12 @@ def queue_activation_email(*, user, raw_token):
     activation = EmployeeActivationToken.objects.get(user=user)
     outbox = EmailOutbox.objects.create(
         recipient=user, message_type=EmailOutbox.MessageType.ACCOUNT_ACTIVATION,
+        delivery_provider=getattr(settings, "EMAIL_DELIVERY_PROVIDER", "smtp"),
+        automatic_retry_enabled=True,
         source_reference=f"activation:{user.pk}:{activation.token_hash}",
     )
-    transaction.on_commit(lambda: deliver_activation_email(outbox.pk, raw_token=raw_token))
+    if getattr(settings, "EMAIL_DELIVERY_SYNCHRONOUS", False):
+        transaction.on_commit(lambda: deliver_activation_email(outbox.pk, raw_token=raw_token))
     return outbox
 
 
@@ -130,6 +133,7 @@ def deliver_activation_email(outbox_id, *, raw_token=None):
             text_body=render_to_string(f"emails/{template}.txt", context),
             html_body=render_to_string(f"emails/{template}.html", context),
             from_email=settings.DEFAULT_FROM_EMAIL,
+            provider=outbox.delivery_provider,
         )
         if sent != 1:
             raise RuntimeError("The email backend did not accept the recovery message.")
@@ -203,10 +207,13 @@ def queue_password_reset_email(*, user):
             queued_at = previous.queued_at.replace(microsecond=0) + timedelta(seconds=1)
     outbox = EmailOutbox.objects.create(
         recipient=user, message_type=EmailOutbox.MessageType.PASSWORD_RESET,
+        delivery_provider=getattr(settings, "EMAIL_DELIVERY_PROVIDER", "smtp"),
+        automatic_retry_enabled=True,
         source_reference=f"password-reset:{user.pk}",
         queued_at=queued_at,
     )
-    transaction.on_commit(lambda: deliver_activation_email(outbox.pk))
+    if getattr(settings, "EMAIL_DELIVERY_SYNCHRONOUS", False):
+        transaction.on_commit(lambda: deliver_activation_email(outbox.pk))
     return outbox
 
 
@@ -224,10 +231,12 @@ def process_pending_email(*, limit=100):
     now, stale = timezone.now(), timezone.now() - PROCESSING_STALE_AFTER
     ids = list(EmailOutbox.objects.filter(
         status__in=[EmailOutbox.Status.QUEUED, EmailOutbox.Status.FAILED],
+        automatic_retry_enabled=True,
         attempt_count__lt=MAX_DELIVERY_ATTEMPTS,
     ).order_by("queued_at", "pk").values_list("pk", flat=True)[:limit])
     stale_ids = list(EmailOutbox.objects.filter(
         status=EmailOutbox.Status.PROCESSING, processing_started_at__lt=stale,
+        automatic_retry_enabled=True,
         attempt_count__lt=MAX_DELIVERY_ATTEMPTS,
     ).order_by("queued_at", "pk").values_list("pk", flat=True)[:max(0, limit - len(ids))])
     return [deliver_activation_email(pk) for pk in ids + stale_ids]

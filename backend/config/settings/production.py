@@ -46,3 +46,11 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="dms@alliancepowerg.com")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="dms@alliancepowerg.com")
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=20)
+if EMAIL_DELIVERY_PROVIDER == "zoho_api":
+    for _zoho_setting in ("ZOHO_OAUTH_CLIENT_ID", "ZOHO_OAUTH_CLIENT_SECRET", "ZOHO_OAUTH_REDIRECT_URI",
+                          "ZOHO_MAIL_ACCOUNT_ID", "ZOHO_MAIL_TOKEN_ENCRYPTION_KEY"):
+        if not globals().get(_zoho_setting):
+            raise ImproperlyConfigured(f"{_zoho_setting} is required when EMAIL_DELIVERY_PROVIDER=zoho_api.")
+    expected_redirect = f"{DMS_BASE_URL}/integrations/zoho/callback/"
+    if ZOHO_OAUTH_REDIRECT_URI != expected_redirect:
+        raise ImproperlyConfigured("ZOHO_OAUTH_REDIRECT_URI must match the canonical DMS callback URI.")

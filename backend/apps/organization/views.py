@@ -30,6 +30,7 @@ from .services import (allow_recovery_request, complete_password_reset, complete
                        activation_eligibility, valid_password_reset_token,
                        save_department, save_position, update_employee)
 from .activation_email import queue_password_reset_email
+from apps.documents.zoho_mail import authorization_url, complete_authorization
 
 
 def _shell(request, title, crumbs):
@@ -231,7 +232,7 @@ def bootstrap_employee_create(request):
 def employee_activate(request, uidb64, token):
     def activation_response(template, context=None, *, status=200):
         response = render(request, template, context or {}, status=status)
-        response["Referrer-Policy"] = "no-referrer"
+        response["Referrer-Policy"] = "same-origin"
         response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         return response
 
@@ -320,6 +321,26 @@ def confirm_password_reset(request, uidb64, token):
             return _recovery_response(request, "accounts/recovery_invalid.html", status=400)
         return _recovery_response(request, "accounts/recovery_complete.html")
     return _recovery_response(request, "accounts/recovery_confirm.html", {"form": form})
+
+
+@dms_write_required
+@permission_required("organization.manage_roles", raise_exception=True)
+def zoho_connect(request):
+    if request.method != "GET":
+        return HttpResponse(status=405)
+    return redirect(authorization_url(request))
+
+
+@dms_write_required
+@permission_required("organization.manage_roles", raise_exception=True)
+def zoho_callback(request):
+    if request.method != "GET":
+        return HttpResponse(status=405)
+    try:
+        complete_authorization(request, code=request.GET.get("code"), state=request.GET.get("state"))
+    except Exception:
+        return HttpResponse("Zoho authorization could not be completed.", status=400)
+    return HttpResponse("Zoho Mail API authorization completed.", status=200)
 
 
 @dms_write_required

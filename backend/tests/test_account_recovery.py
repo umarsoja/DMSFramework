@@ -135,6 +135,29 @@ class AccountRecoveryTests(TestCase):
         self.assertEqual(reset_response.status_code, 200)
         self.assertContains(reset_response, "Password updated")
 
+    @override_settings(
+        ALLOWED_HOSTS=["dms.example.test", "127.0.0.1"],
+        CSRF_TRUSTED_ORIGINS=["https://dms.example.test"],
+        SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"),
+    )
+    def test_activation_form_passes_csrf_behind_trusted_https_proxy(self):
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+        activation_url = reverse("employee-activate", args=[
+            urlsafe_base64_encode(force_bytes(self.profile.user_id)), self.profile._activation_token,
+        ])
+        client = Client(enforce_csrf_checks=True)
+        token = self._csrf_form_token(client, activation_url)
+        response = client.post(
+            activation_url,
+            {"new_password1": self.new_password, "new_password2": self.new_password,
+             "csrfmiddlewaretoken": token},
+            HTTP_HOST="dms.example.test", HTTP_X_FORWARDED_PROTO="https",
+            HTTP_ORIGIN="https://dms.example.test", HTTP_REFERER="https://dms.example.test" + activation_url,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
+
     def test_activation_request_uses_existing_records_and_generic_response(self):
         user_id, profile_id = self.profile.user_id, self.profile.pk
         assignment_id = self.profile.current_assignment.pk

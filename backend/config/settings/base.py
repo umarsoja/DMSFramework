@@ -191,10 +191,22 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="dms@alliancepowerg.com")
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=20)
 DMS_BASE_URL = env("DMS_BASE_URL", default="")
+EMAIL_DELIVERY_PROVIDER = env("EMAIL_DELIVERY_PROVIDER", default="smtp").strip().lower()
+EMAIL_DELIVERY_SYNCHRONOUS = env.bool("EMAIL_DELIVERY_SYNCHRONOUS", default=False)
+ZOHO_OAUTH_CLIENT_ID = env("ZOHO_OAUTH_CLIENT_ID", default="")
+ZOHO_OAUTH_CLIENT_SECRET = env("ZOHO_OAUTH_CLIENT_SECRET", default="")
+ZOHO_OAUTH_AUTH_URL = env("ZOHO_OAUTH_AUTH_URL", default="https://accounts.zoho.com/oauth/v2/auth")
+ZOHO_OAUTH_TOKEN_URL = env("ZOHO_OAUTH_TOKEN_URL", default="https://accounts.zoho.com/oauth/v2/token")
+ZOHO_OAUTH_REDIRECT_URI = env("ZOHO_OAUTH_REDIRECT_URI", default="")
+ZOHO_MAIL_API_BASE_URL = env("ZOHO_MAIL_API_BASE_URL", default="https://mail.zoho.com/api")
+ZOHO_MAIL_ACCOUNT_ID = env("ZOHO_MAIL_ACCOUNT_ID", default="")
+ZOHO_MAIL_TOKEN_ENCRYPTION_KEY = env("ZOHO_MAIL_TOKEN_ENCRYPTION_KEY", default="")
 
 if EMAIL_USE_SSL and EMAIL_USE_TLS:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("EMAIL_USE_SSL and EMAIL_USE_TLS cannot both be enabled.")
+if EMAIL_DELIVERY_PROVIDER not in {"smtp", "zoho_api"}:
+    raise ImproperlyConfigured("EMAIL_DELIVERY_PROVIDER must be smtp or zoho_api.")
 
 # =============================================================================
 # LOGGING

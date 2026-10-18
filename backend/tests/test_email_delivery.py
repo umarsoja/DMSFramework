@@ -149,6 +149,38 @@ class ActivationEmailDeliveryTests(TestCase):
         self.assertEqual(outbox.status, EmailOutbox.Status.FAILED)
         self.assertNotIn(profile._activation_token, outbox.latest_failure_reason)
 
+    def test_legacy_queued_and_failed_records_are_quarantined_from_timer(self):
+        profile = self.create_employee(username="legacy-quarantine")
+        EmailOutbox.objects.filter(automatic_retry_enabled=True).update(automatic_retry_enabled=False)
+        queued = EmailOutbox.objects.create(
+            recipient=profile.user, message_type=EmailOutbox.MessageType.ACCOUNT_ACTIVATION,
+            status=EmailOutbox.Status.QUEUED,
+        )
+        failed = EmailOutbox.objects.create(
+            recipient=profile.user, message_type=EmailOutbox.MessageType.PASSWORD_RESET,
+            status=EmailOutbox.Status.FAILED, attempt_count=1,
+        )
+        with patch("apps.organization.activation_email.deliver_activation_email") as deliver:
+            call_command("process_email_outbox", stdout=io.StringIO())
+        queued.refresh_from_db()
+        failed.refresh_from_db()
+        deliver.assert_not_called()
+        self.assertEqual(queued.attempt_count, 0)
+        self.assertEqual(failed.attempt_count, 1)
+        self.assertFalse(queued.automatic_retry_enabled)
+        self.assertFalse(failed.automatic_retry_enabled)
+
+    def test_newly_queued_record_is_eligible_for_timer(self):
+        profile = self.create_employee(username="fresh-queue")
+        EmailOutbox.objects.filter(automatic_retry_enabled=True).update(automatic_retry_enabled=False)
+        fresh = EmailOutbox.objects.create(
+            recipient=profile.user, message_type=EmailOutbox.MessageType.ACCOUNT_ACTIVATION,
+            status=EmailOutbox.Status.QUEUED, automatic_retry_enabled=True,
+        )
+        with patch("apps.organization.activation_email.deliver_activation_email", return_value=fresh) as deliver:
+            call_command("process_email_outbox", stdout=io.StringIO())
+        deliver.assert_called_once_with(fresh.pk)
+
     def test_recovery_command_retries_failed_delivery_without_storing_old_token(self):
         with patch("apps.organization.activation_email.send_dms_email", side_effect=OSError("temporary SMTP outage")):
             with self.captureOnCommitCallbacks(execute=True):
@@ -252,7 +284,7 @@ class ActivationEmailDeliveryTests(TestCase):
         self.assertEqual(EmailOutbox.objects.filter(recipient=profile.user).count(), 1)
         self.assertEqual(EmployeeActivationToken.objects.get(user=profile.user).token_hash, previous_hash)
 
-    def test_activation_pages_set_no_referrer_policy_and_expired_links_stay_invalid(self):
+    def test_activation_pages_use_same_origin_referrer_policy_and_expired_links_stay_invalid(self):
         profile = self.create_employee("expired-mail")
         activation = EmployeeActivationToken.objects.get(user=profile.user)
         activation.expires_at = timezone.now() - timedelta(seconds=1)
@@ -262,7 +294,7 @@ class ActivationEmailDeliveryTests(TestCase):
         ]))
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
         self.assertIn("no-store", response["Cache-Control"])
 
     def test_activation_link_tokens_are_redacted_from_request_logs(self):

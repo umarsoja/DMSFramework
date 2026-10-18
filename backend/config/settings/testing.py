@@ -1,6 +1,7 @@
 from .base import *
 
 DEBUG = False
+EMAIL_DELIVERY_SYNCHRONOUS = True
 
 # Keep the test suite isolated from the DATABASE_URL used by local development.
 DATABASES = {
