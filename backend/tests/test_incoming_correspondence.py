@@ -21,6 +21,7 @@ from apps.documents.models import (
     DocumentAccess,
     DocumentType,
     DocumentVersion,
+    NotificationReceipt,
     RelatedDocument,
 )
 from apps.documents.services import (
@@ -162,6 +163,46 @@ class IncomingCorrespondenceTests(TestCase):
             "can_view": True,
             "can_download": False,
         }, event.context["visibility_grants"])
+
+    def test_cc_recipients_receive_view_only_access_and_one_receipt(self):
+        document = self.register(cc=[self.outsider.employee_profile, self.manager_profile])
+
+        outsider_grant = DocumentAccess.objects.get(document=document, user=self.outsider)
+        self.assertTrue(outsider_grant.can_view)
+        self.assertFalse(outsider_grant.can_download)
+        self.assertEqual(
+            NotificationReceipt.objects.filter(
+                event__document=document, recipient=self.outsider,
+            ).count(),
+            1,
+        )
+        # The receiving HOD is not duplicated when also listed as CC.
+        self.assertEqual(
+            NotificationReceipt.objects.filter(
+                event__document=document, recipient=self.manager,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            NotificationReceipt.objects.filter(event__document=document).count(), 2,
+        )
+
+    def test_cc_service_rejects_inactive_or_unauthorised_profiles(self):
+        inactive = get_user_model().objects.create_user(username="inactive-cc", password="pw")
+        inactive_profile = EmployeeProfile.objects.create(
+            user=inactive, staff_id="REG-INACTIVE-CC", account_status=EmployeeProfile.AccountStatus.INACTIVE,
+        )
+        with self.assertRaisesMessage(ValidationError, "active employees"):
+            self.register(cc=[inactive_profile])
+
+        viewer = get_user_model().objects.create_user(username="viewer-cc", password="pw")
+        viewer_profile = EmployeeProfile.objects.create(
+            user=viewer, staff_id="REG-VIEWER-CC", account_status=EmployeeProfile.AccountStatus.ACTIVE,
+        )
+        create_assignment(employee=viewer_profile, department=self.office, position=self.position, actor=self.user)
+        viewer.groups.add(Group.objects.get(name="DMS Viewer"))
+        with self.assertRaisesMessage(ValidationError, "active employees"):
+            self.register(cc=[viewer_profile])
 
     def test_office_membership_and_other_office_manager_role_do_not_grant_visibility(self):
         document = self.register()

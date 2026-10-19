@@ -37,6 +37,18 @@ def resolve_workflow_actor(*, step, document, selected_user=None):
             profile = None
         if profile and not is_workflow_actor_eligible(profile):
             raise ValidationError("The selected employee does not have an active DMS account.")
+        creator_profile = getattr(document.created_by, "employee_profile", None)
+        if profile and creator_profile:
+            assignment = profile.current_assignment
+            cursor = assignment.supervisor_id if assignment else None
+            seen = set()
+            while cursor and cursor not in seen:
+                if cursor == creator_profile.pk:
+                    raise ValidationError("A memo cannot be routed to a subordinate approval reviewer.")
+                seen.add(cursor)
+                supervisor = EmployeeProfile.objects.filter(pk=cursor).first()
+                assignment = supervisor.current_assignment if supervisor else None
+                cursor = assignment.supervisor_id if assignment else None
         if not profile and (not user.is_active or not user.is_staff):
             raise ValidationError("Choose an active staff reviewer.")
     elif actor_type == step.ActorType.DOCUMENT_CREATOR:

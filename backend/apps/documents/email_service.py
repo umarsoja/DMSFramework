@@ -3,6 +3,8 @@
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.db import IntegrityError
+from .models import EmailOutbox
 
 
 def send_dms_email(*, recipient, subject, text_body, html_body, from_email=None, provider=None):
@@ -26,3 +28,20 @@ def send_dms_email(*, recipient, subject, text_body, html_body, from_email=None,
     if html_body:
         message.attach_alternative(html_body, "text/html")
     return message.send(fail_silently=False)
+
+
+def queue_workflow_notification(*, event, recipient, workflow_task=None):
+    """Queue one idempotent workflow email; delivery remains timer-driven."""
+    if not recipient or not recipient.email:
+        return None
+    source = f"workflow:{event.pk}:{recipient.pk}"
+    outbox, _ = EmailOutbox.objects.get_or_create(
+        message_type=EmailOutbox.MessageType.WORKFLOW_NOTIFICATION,
+        recipient=recipient,
+        source_reference=source,
+        defaults={
+            "delivery_provider": getattr(settings, "EMAIL_DELIVERY_PROVIDER", "smtp"),
+            "automatic_retry_enabled": True,
+        },
+    )
+    return outbox

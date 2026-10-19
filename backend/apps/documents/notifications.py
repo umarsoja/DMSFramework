@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.conf import settings
 
 from .access import can_view_document, visible_documents
 from .handlers import INCOMING_CORRESPONDENCE_TYPE_CODE
@@ -18,6 +19,9 @@ def record_notification(event, recipient, workflow_task=None):
         event=event,
         defaults={"workflow_task": workflow_task},
     )
+    if receipt and recipient.email and getattr(settings, "WORKFLOW_EMAIL_NOTIFICATIONS", True):
+        from .email_service import queue_workflow_notification
+        queue_workflow_notification(event=event, recipient=recipient, workflow_task=workflow_task)
     return receipt
 
 

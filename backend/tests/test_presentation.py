@@ -102,6 +102,14 @@ class PresentationTests(SimpleTestCase):
         self.assertIn(".org-department-children { position: relative; display: flex; justify-content: safe center;", css)
         self.assertIn(".org-children { position: relative; display: flex; justify-content: safe center;", css)
 
+    def test_notification_bell_has_explicit_contrast_and_current_color_stroke(self):
+        css_path = Path(__file__).resolve().parents[1] / "static" / "apgc" / "css" / "dms-portal.css"
+        css = css_path.read_text(encoding="utf-8")
+        self.assertIn(
+            ".dms-notification-trigger .tf-icon { width: 1.3rem; height: 1.3rem; color: #344a83; stroke: currentColor; }",
+            css,
+        )
+
     def test_classification_badge_uses_existing_display_value_and_distinct_styles(self):
         backend = Path(__file__).resolve().parents[1]
         template = (backend / "templates" / "components" / "document_classification.html").read_text(encoding="utf-8")

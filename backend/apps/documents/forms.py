@@ -210,6 +210,10 @@ class IncomingCorrespondenceForm(forms.Form):
     received_on = forms.DateField(label="Date received by APGC", widget=forms.DateInput(attrs={"type": "date"}))
     priority = forms.ChoiceField(choices=PRIORITY_CHOICES, label="Priority", initial="MEDIUM")
     receiving_office = forms.ModelChoiceField(queryset=Department.objects.none(), label="Receiving office/unit")
+    cc = DirectoryEmployeeMultipleChoiceField(
+        queryset=EmployeeProfile.objects.none(), required=False, label="CC recipients",
+        widget=DirectoryEmployeeSelectorWidget,
+    )
     classification = forms.ChoiceField(choices=Document.Classification.choices, label="Classification")
     original_document = forms.FileField(label="Original received document")
     supporting_documents = MultipleFileField(required=False, label="Supporting documents")
@@ -220,6 +224,7 @@ class IncomingCorrespondenceForm(forms.Form):
             css_class = "form-select" if isinstance(field.widget, forms.Select) else "form-control"
             field.widget.attrs["class"] = " ".join(filter(None, (field.widget.attrs.get("class", ""), css_class)))
         self.fields["receiving_office"].queryset = Department.objects.filter(is_active=True).order_by("name")
+        self.fields["cc"].queryset = current_directory_profiles(include_viewers=False)
         self.fields["correspondence_type"].widget.attrs.update({
             "x-model": "correspondenceType",
             "x-init": "correspondenceType = $el.value",
@@ -232,6 +237,9 @@ class IncomingCorrespondenceForm(forms.Form):
         if cleaned.get("correspondence_type") == "OTHER" and not cleaned.get("other_correspondence_type", "").strip():
             self.add_error("other_correspondence_type", "Specify the document type when Others is selected.")
         self._check_unique_filenames(cleaned)
+        submitted_cc = self.data.getlist(self.add_prefix("cc")) if hasattr(self.data, "getlist") else []
+        if len(submitted_cc) != len(set(submitted_cc)):
+            self.add_error("cc", "An employee can only be selected once in the CC recipients.")
         validate_upload_batch([
             cleaned.get("original_document"), *cleaned.get("supporting_documents", [])
         ])

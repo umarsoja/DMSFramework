@@ -12,7 +12,7 @@ from django.utils import timezone
 from apps.documents.handlers import INCOMING_CORRESPONDENCE_TYPE_CODE
 from apps.documents.models import (
     AuditEvent, Document, DocumentAccess, DocumentType, DocumentVersion,
-    NotificationReceipt, WorkflowActionType, WorkflowDecision, WorkflowDefinition, WorkflowInstance,
+    EmailOutbox, NotificationReceipt, WorkflowActionType, WorkflowDecision, WorkflowDefinition, WorkflowInstance,
     WorkflowStep, WorkflowTask,
 )
 from apps.documents.notifications import notification_menu_data, record_notification
@@ -183,8 +183,10 @@ class NotificationExperienceTests(TestCase):
         step.action_type = action
         step.save(update_fields=["action_type"])
         return create_memo(
-            owner=self.manager,
-            reviewer=self.assignee,
+            # Route upward through the manager; subordinate review selection is
+            # intentionally rejected by the memo service.
+            owner=self.assignee,
+            reviewer=self.manager,
             values={
                 "to": "Managing Director", "through": "Executive Director", "cc": "Finance",
                 "subject": subject, "body": "Please review this memo.",
@@ -195,53 +197,85 @@ class NotificationExperienceTests(TestCase):
     def test_memo_review_and_approval_assignments_notify_actual_assignee(self):
         review_memo = self.make_submitted_memo(subject="Review me")
         review_task = review_memo.workflow.tasks.get()
-        review_receipt = NotificationReceipt.objects.get(recipient=self.assignee, workflow_task=review_task)
+        review_receipt = NotificationReceipt.objects.get(recipient=self.manager, workflow_task=review_task)
         self.assertEqual(review_receipt.title, "Memo requires your review")
         self.assertFalse(NotificationReceipt.objects.filter(recipient=self.outsider).exists())
 
         approval_memo = self.make_submitted_memo(action_code="approve", subject="Approve me")
         approval_task = approval_memo.workflow.tasks.get()
-        approval_receipt = NotificationReceipt.objects.get(recipient=self.assignee, workflow_task=approval_task)
+        approval_receipt = NotificationReceipt.objects.get(recipient=self.manager, workflow_task=approval_task)
         self.assertEqual(approval_receipt.title, "Memo requires your approval")
-        self.assertEqual(notification_menu_data(self.assignee)["notification_unread_count"], 2)
+        self.assertEqual(notification_menu_data(self.manager)["notification_unread_count"], 3)
+
+    def test_actionable_receipt_queues_one_workflow_email_without_sending(self):
+        self.manager.email = "manager@example.test"
+        self.manager.save(update_fields=["email"])
+        with override_settings(WORKFLOW_EMAIL_NOTIFICATIONS=True):
+            memo = self.make_submitted_memo(subject="Email queue test")
+        task = memo.workflow.tasks.get()
+        self.assertEqual(
+            EmailOutbox.objects.filter(
+                message_type=EmailOutbox.MessageType.WORKFLOW_NOTIFICATION,
+                recipient=self.manager,
+                source_reference=f"workflow:{task.instance.document.audit_events.filter(action=AuditEvent.Action.UNDER_REVIEW).first().pk}:{self.manager.pk}",
+            ).count(),
+            1,
+        )
+        # Re-recording the same event is idempotent.
+        event = task.instance.document.audit_events.get(action=AuditEvent.Action.UNDER_REVIEW)
+        record_notification(event, self.manager, workflow_task=task)
+        self.assertEqual(EmailOutbox.objects.filter(message_type=EmailOutbox.MessageType.WORKFLOW_NOTIFICATION).count(), 1)
+
+    def test_workflow_email_notifications_default_off_preserves_receipts(self):
+        self.manager.email = "manager@example.test"
+        self.manager.save(update_fields=["email"])
+        with override_settings(WORKFLOW_EMAIL_NOTIFICATIONS=False):
+            memo = self.make_submitted_memo(subject="In-app only notification")
+        task = memo.workflow.tasks.get()
+        self.assertTrue(NotificationReceipt.objects.filter(
+            recipient=self.manager, workflow_task=task,
+        ).exists())
+        self.assertFalse(EmailOutbox.objects.filter(
+            message_type=EmailOutbox.MessageType.WORKFLOW_NOTIFICATION,
+        ).exists())
 
     def test_reassignment_notifies_new_assignee_and_existing_receipt_stops_actionable(self):
         memo = self.make_submitted_memo()
         task = memo.workflow.tasks.get()
-        old_receipt = NotificationReceipt.objects.get(recipient=self.assignee, workflow_task=task)
+        old_receipt = NotificationReceipt.objects.get(recipient=self.manager, workflow_task=task)
         reassign_task(task_id=task.pk, actor=self.manager, new_user=self.registrar, reason="Coverage change")
         task.refresh_from_db()
         self.assertEqual(task.assigned_to, self.registrar)
         self.assertTrue(NotificationReceipt.objects.filter(
             recipient=self.registrar, event__action=AuditEvent.Action.REASSIGNED, workflow_task=task,
         ).exists())
-        self.assertEqual(notification_menu_data(self.assignee)["notification_unread_count"], 0)
+        self.assertEqual(notification_menu_data(self.manager)["notification_unread_count"], 1)
         self.assertEqual(notification_menu_data(self.registrar)["notification_unread_count"], 1)
         self.assertIsNone(old_receipt.seen_at)
 
     def test_approved_and_returned_memos_notify_original_initiator_and_render(self):
         approved = self.make_submitted_memo(subject="Approval outcome")
         approval_task = approved.workflow.tasks.get()
-        decide_review(task_id=approval_task.pk, actor=self.assignee, outcome=WorkflowDecision.Outcome.APPROVE)
-        approved_receipt = NotificationReceipt.objects.get(recipient=self.manager, event__action=AuditEvent.Action.APPROVED)
+        decide_review(task_id=approval_task.pk, actor=self.manager, outcome=WorkflowDecision.Outcome.APPROVE)
+        approved_receipt = NotificationReceipt.objects.get(recipient=self.assignee, event__action=AuditEvent.Action.APPROVED)
         self.assertEqual(approved_receipt.title, "Your memo has been approved.")
-        self.assertEqual(approved_receipt.event.document.created_by, self.manager)
-        record_notification(approved_receipt.event, self.manager)
+        self.assertEqual(approved_receipt.event.document.created_by, self.assignee)
+        record_notification(approved_receipt.event, self.assignee)
         self.assertEqual(NotificationReceipt.objects.filter(
-            recipient=self.manager, event=approved_receipt.event,
+            recipient=self.assignee, event=approved_receipt.event,
         ).count(), 1)
 
         returned = self.make_submitted_memo(subject="Return outcome")
         return_task = returned.workflow.tasks.get()
-        decide_review(task_id=return_task.pk, actor=self.assignee, outcome=WorkflowDecision.Outcome.RETURN,
+        decide_review(task_id=return_task.pk, actor=self.manager, outcome=WorkflowDecision.Outcome.RETURN,
                       comment="Please correct the cost estimate.")
-        returned_receipt = NotificationReceipt.objects.get(recipient=self.manager, event__action=AuditEvent.Action.RETURNED)
+        returned_receipt = NotificationReceipt.objects.get(recipient=self.assignee, event__action=AuditEvent.Action.RETURNED)
         self.assertEqual(returned_receipt.title, "Your memo has been returned for revision.")
         self.assertEqual(returned_receipt.message, "Please correct the cost estimate.")
-        self.assertEqual(notification_menu_data(self.manager)["notification_unread_count"], 3)
+        self.assertEqual(notification_menu_data(self.assignee)["notification_unread_count"], 2)
 
         client = Client()
-        client.force_login(self.manager)
+        client.force_login(self.assignee)
         dashboard = client.get(reverse("dashboard"))
         self.assertContains(dashboard, "Your memo has been approved.")
         self.assertContains(dashboard, "Approval outcome")
@@ -264,22 +298,22 @@ class NotificationExperienceTests(TestCase):
         task = memo.workflow.tasks.get()
         with self.assertRaises(RuntimeError):
             with transaction.atomic():
-                decide_review(task_id=task.pk, actor=self.assignee, outcome=WorkflowDecision.Outcome.APPROVE)
+                decide_review(task_id=task.pk, actor=self.manager, outcome=WorkflowDecision.Outcome.APPROVE)
                 raise RuntimeError("rollback enclosing business operation")
         memo.refresh_from_db()
         task.refresh_from_db()
         self.assertEqual(memo.status, Document.Status.UNDER_REVIEW)
         self.assertEqual(task.status, WorkflowTask.Status.PENDING)
         self.assertFalse(NotificationReceipt.objects.filter(
-            recipient=self.manager, event__action=AuditEvent.Action.APPROVED,
+            recipient=self.assignee, event__action=AuditEvent.Action.APPROVED,
         ).exists())
 
     def test_failed_memo_decision_does_not_notify_initiator(self):
         memo = self.make_submitted_memo()
         task = memo.workflow.tasks.get()
         with self.assertRaises(ValidationError):
-            decide_review(task_id=task.pk, actor=self.assignee, outcome=WorkflowDecision.Outcome.RETURN)
+            decide_review(task_id=task.pk, actor=self.manager, outcome=WorkflowDecision.Outcome.RETURN)
         self.assertEqual(task.status, WorkflowTask.Status.PENDING)
         self.assertFalse(NotificationReceipt.objects.filter(
-            recipient=self.manager, event__action=AuditEvent.Action.RETURNED,
+            recipient=self.assignee, event__action=AuditEvent.Action.RETURNED,
         ).exists())

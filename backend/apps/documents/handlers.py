@@ -179,6 +179,8 @@ class IncomingCorrespondenceHandler:
     """Normalize structured registration metadata for an external record."""
 
     def prepare_payload(self, values: Mapping[str, Any]) -> dict[str, Any]:
+        from apps.organization.directory import employee_directory_label
+
         received_on = values["received_on"]
         document_date = values["document_date"]
         receiving_office = values["receiving_office"]
@@ -203,6 +205,8 @@ class IncomingCorrespondenceHandler:
             "receiving_office_id": receiving_office.pk,
             "receiving_office_code": receiving_office.code,
             "receiving_office_name": receiving_office.name,
+            "cc": ", ".join(employee_directory_label(employee) for employee in values.get("cc", ())),
+            "cc_employee_ids": [employee.pk for employee in values.get("cc", ())],
             "priority": _PRIORITY_LABELS[priority_code],
             "priority_code": priority_code,
             "classification": values["classification"],

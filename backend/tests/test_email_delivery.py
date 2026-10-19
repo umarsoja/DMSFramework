@@ -81,7 +81,9 @@ class ActivationEmailDeliveryTests(TestCase):
         self.assertEqual(len(message.alternatives), 1)
         html_body, mime_type = message.alternatives[0]
         self.assertEqual(mime_type, "text/html")
-        self.assertIn("Activate your account", html_body)
+        self.assertIn("Activate your APGC DMS account", html_body)
+        self.assertIn(profile.user.username, message.body + html_body)
+        self.assertIn("Do not share this activation link", message.body + html_body)
         self.assertNotIn(self.password, message.body + html_body)
 
         outbox = EmailOutbox.objects.get(recipient=profile.user)

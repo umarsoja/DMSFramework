@@ -111,6 +111,7 @@ def deliver_activation_email(outbox_id, *, raw_token=None):
             elif hashlib.sha256(raw_token.encode()).hexdigest() != activation.token_hash:
                 raise ValueError("Activation invitation was superseded; message not sent.")
             context = {"employee_name": user.get_full_name().strip() or user.username,
+                       "username": user.get_username(),
                        "activation_url": activation_link(user, raw_token), "expires_in_hours": 24,
                        "staff_id": profile.staff_id}
             subject, template = "Your APGC DMS account is ready", "activation"
@@ -126,6 +127,29 @@ def deliver_activation_email(outbox_id, *, raw_token=None):
             context = {"employee_name": user.get_full_name().strip() or user.username,
                        "reset_url": _canonical_link("password-reset-confirm", user, token)}
             subject, template = "Reset your APGC DMS password", "password_reset"
+        elif message_type == EmailOutbox.MessageType.WORKFLOW_NOTIFICATION:
+            from apps.documents.models import AuditEvent, NotificationReceipt
+            event_id = outbox.source_reference.removeprefix("workflow:").split(":", 1)[0]
+            event = AuditEvent.objects.select_related("document", "document__document_type").get(pk=int(event_id))
+            receipt = NotificationReceipt.objects.filter(
+                event=event, recipient=user,
+            ).select_related("workflow_task__action_type", "workflow_task__step").first()
+            if receipt is None:
+                raise ValueError("Workflow notification receipt is no longer available.")
+            if event.action == AuditEvent.Action.INCOMING_REGISTERED:
+                route = "documents:incoming-detail"
+            else:
+                route = "documents:memo-detail" if event.document.document_type.code == "IM" else "documents:incoming-detail"
+            action_url = _canonical_link(route, user, "") if False else f"{(getattr(settings, 'DMS_BASE_URL', '') or '').rstrip('/')}{reverse(route, args=[event.document_id])}"
+            context = {
+                "employee_name": user.get_full_name().strip() or user.username,
+                "document_type": event.document.document_type.name,
+                "document_reference": event.document.reference or f"DMS-{event.document_id}",
+                "notification_title": receipt.title,
+                "notification_message": receipt.message or "Please sign in to review this notification.",
+                "action_url": action_url,
+            }
+            subject, template = f"APGC DMS: {receipt.title}", "workflow_notification"
         else:
             raise ValueError("Unsupported recovery message type.")
         sent = send_dms_email(

@@ -1,0 +1,12 @@
+Alliance Power Generation Company
+
+Hello {{ employee_name }},
+
+{{ notification_title }}
+{{ document_type }}: {{ document_reference }}
+
+{{ notification_message }}
+
+Open in APGC DMS: {{ action_url }}
+
+Please sign in to access this record. Access is subject to your existing permissions.

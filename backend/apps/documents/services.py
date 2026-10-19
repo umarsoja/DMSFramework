@@ -239,6 +239,21 @@ def register_incoming_correspondence(*, actor, values):
         DocumentAccess.objects.create(
             document=document, user=manager.user, can_view=True, can_download=False, granted_by=actor,
         )
+    cc_profiles = list(values.get("cc", ()))
+    # Keep the service boundary authoritative when callers bypass the form.
+    from apps.organization.directory import current_directory_profiles
+    eligible_cc_ids = set(current_directory_profiles(include_viewers=False).values_list("pk", flat=True))
+    if any(profile.pk not in eligible_cc_ids for profile in cc_profiles):
+        raise ValidationError({"cc": "Choose only active employees with a current DMS assignment."})
+    cc_users = []
+    for cc_profile in cc_profiles:
+        cc_user = cc_profile.user
+        if cc_user.pk in {actor.pk, manager.user_id} or cc_user.pk in {user.pk for user in cc_users}:
+            continue
+        DocumentAccess.objects.create(
+            document=document, user=cc_user, can_view=True, can_download=False, granted_by=actor,
+        )
+        cc_users.append(cc_user)
     allocate_document_reference(document)
     document.save(update_fields=[
         "reference", "numbering_year", "number_sequence", "modified_at",
@@ -268,6 +283,9 @@ def register_incoming_correspondence(*, actor, values):
     if manager_grant_created:
         from .notifications import record_notification
         record_notification(event, manager.user)
+    from .notifications import record_notification
+    for cc_user in cc_users:
+        record_notification(event, cc_user)
     return document
 
 

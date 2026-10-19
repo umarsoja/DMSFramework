@@ -1,11 +1,16 @@
-APGC DMS
+ALLIANCE POWER GENERATION COMPANY
+Document Management System
 
 Hello {{ employee_name }},
 
-Your APGC DMS account has been created. Set your password using this secure link:
+Your APGC Document Management System account has been created.
+Your login username is: {{ username }}
+
+Activate your account and set your password using this secure link:
 {{ activation_url }}
 
 This link expires in {{ expires_in_hours }} hours and can be used once.
+Security notice: Do not share this activation link, username or password with anyone.
 If you need help, contact your IT support team through APGC's approved support channel.
 
-APGC DMS
+Alliance Power Generation Company · APGC DMS

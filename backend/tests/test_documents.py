@@ -37,6 +37,7 @@ from apps.documents.services import (
 )
 from apps.organization.models import Department, EmployeeProfile, Position
 from apps.organization.services import create_assignment
+from apps.organization.actors import resolve_workflow_actor
 
 
 def response_body(response):
@@ -1070,6 +1071,23 @@ class InternalMemoLifecycleTests(TestCase):
         for reviewer in (self.owner, inactive_staff, regular_user, no_role_user, viewer_user):
             with self.subTest(reviewer=reviewer.username), self.assertRaises(ValidationError):
                 save_memo(document=document, actor=self.owner, values=self.values(), reviewer=reviewer)
+
+    def test_hierarchy_rejects_subordinate_reviewer_at_service_and_actor_boundaries(self):
+        document = self.make_draft()
+        subordinate, subordinate_profile = self.make_directory_employee(
+            username="nested-subordinate", first_name="Nested", last_name="Subordinate",
+            staff_id="MEMO-NESTED-SUBORDINATE", supervisor=self.owner_profile,
+        )
+        step = document.document_type.workflows.first().steps.filter(is_review=True).first()
+        before = (WorkflowTask.objects.count(), WorkflowDecision.objects.count(), document.audit_events.count())
+        with self.assertRaisesMessage(ValidationError, "subordinate"):
+            resolve_workflow_actor(step=step, document=document, selected_user=subordinate)
+        with self.assertRaisesMessage(ValidationError, "subordinate"):
+            save_memo(document=document, actor=self.owner, values=self.values(), reviewer=subordinate)
+        self.assertEqual(
+            (WorkflowTask.objects.count(), WorkflowDecision.objects.count(), document.audit_events.count()),
+            before,
+        )
 
     def test_invalid_transitions_and_non_owner_mutations_are_rejected(self):
         document = self.make_draft()

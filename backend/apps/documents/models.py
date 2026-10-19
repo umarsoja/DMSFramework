@@ -578,6 +578,7 @@ class EmailOutbox(models.Model):
     class MessageType(models.TextChoices):
         ACCOUNT_ACTIVATION = "ACCOUNT_ACTIVATION", "Account activation"
         PASSWORD_RESET = "PASSWORD_RESET", "Password reset"
+        WORKFLOW_NOTIFICATION = "WORKFLOW_NOTIFICATION", "Workflow notification"
 
     class Status(models.TextChoices):
         QUEUED = "QUEUED", "Queued"
