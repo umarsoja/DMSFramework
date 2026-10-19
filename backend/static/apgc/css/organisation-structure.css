@@ -9,7 +9,7 @@
 .org-department-panel > .org-department-empty { margin: 0; color: #64748b; font-size: .78rem; font-style: italic; text-align: center; }
 .org-department-employees { width: 100%; overflow-x: auto; padding: .25rem .1rem; }
 .org-department-employees > .org-people { position: relative; display: flex; width: max-content; min-width: 100%; flex-direction: column; align-items: center; gap: .85rem; margin-inline: 0; }
-.org-department-children { position: relative; display: flex; justify-content: center; padding-top: 1.5rem; }
+.org-department-children { position: relative; display: flex; justify-content: safe center; padding-top: 1.5rem; }
 .org-department-children::before { position: absolute; top: 0; left: 50%; height: 1.5rem; border-left: 2px solid #8994a6; content: ""; }
 .org-department-branches { position: relative; display: grid; width: max-content; grid-template-columns: repeat(var(--department-count), 280px); gap: 1rem; padding-top: 1.1rem; }
 .org-department-branches::before { position: absolute; top: 0; right: 140px; left: 140px; border-top: 2px solid #8994a6; content: ""; }
@@ -34,7 +34,7 @@
 .org-branch::before { position: absolute; top: -1.5rem; left: 50%; height: 1.5rem; border-left: 2px solid #8994a6; content: ""; }
 .org-branch::after { position: absolute; top: 0; left: 50%; height: calc(1.75rem + 1px); border-left: 2px solid #8994a6; content: ""; }
 .org-branch > h3 { position: absolute; top: -.65rem; left: 1rem; margin: 0; padding: .1rem .5rem; color: #344a83; background: #e8eefa; border: 1px solid #c3cde0; border-radius: .4rem; font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
-.org-children { position: relative; display: flex; justify-content: center; padding-top: 1.5rem; }
+.org-children { position: relative; display: flex; justify-content: safe center; padding-top: 1.5rem; }
 .org-children::before { position: absolute; top: 0; left: 50%; height: 1.5rem; border-left: 2px solid #8994a6; content: ""; }
 .org-children > .org-people, .org-executive-office > .org-people { position: relative; display: flex; width: max-content; flex-wrap: nowrap; justify-content: center; align-items: flex-start; gap: 1.25rem; }
 .org-children > .org-people { padding-top: 1.1rem; }

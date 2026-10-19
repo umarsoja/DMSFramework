@@ -99,6 +99,8 @@ class PresentationTests(SimpleTestCase):
         self.assertIn(".org-chart { display: flex; width: max-content; min-width: 100%;", css)
         self.assertIn("margin-inline: 0; }", css)
         self.assertIn("width: max-content; min-width: 100%; flex-direction: column", css)
+        self.assertIn(".org-department-children { position: relative; display: flex; justify-content: safe center;", css)
+        self.assertIn(".org-children { position: relative; display: flex; justify-content: safe center;", css)
 
     def test_classification_badge_uses_existing_display_value_and_distinct_styles(self):
         backend = Path(__file__).resolve().parents[1]
