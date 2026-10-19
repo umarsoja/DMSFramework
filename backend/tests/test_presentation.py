@@ -87,6 +87,19 @@ class PresentationTests(SimpleTestCase):
         self.assertNotIn("slice:", status_template)
         self.assertIn("display=document.get_status_display", memo_list_template)
 
+    def test_organisation_chart_contains_scroll_containment_for_wide_branches(self):
+        css_path = Path(__file__).resolve().parents[1] / "static" / "apgc" / "css" / "organisation-structure.css"
+        css = css_path.read_text(encoding="utf-8")
+
+        self.assertIn(
+            ".org-chart-scroll { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto;",
+            css,
+        )
+        self.assertIn("overscroll-behavior-inline: contain", css)
+        self.assertIn(".org-chart { display: flex; width: max-content; min-width: 100%;", css)
+        self.assertIn("margin-inline: 0; }", css)
+        self.assertIn("width: max-content; min-width: 100%; flex-direction: column", css)
+
     def test_classification_badge_uses_existing_display_value_and_distinct_styles(self):
         backend = Path(__file__).resolve().parents[1]
         template = (backend / "templates" / "components" / "document_classification.html").read_text(encoding="utf-8")
