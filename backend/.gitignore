@@ -25,7 +25,9 @@ private-media/
 
 # Generated frontend and collected deployment assets
 node_modules/
-static/vendor/
+static/vendor/*
+!static/vendor/tabler-icons/
+!static/vendor/tabler-icons/sprite.svg
 staticfiles/
 tmp/
 *.preview.html

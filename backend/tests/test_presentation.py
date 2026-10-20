@@ -110,6 +110,13 @@ class PresentationTests(SimpleTestCase):
             css,
         )
 
+    def test_notification_header_symbol_exists_in_tracked_sprite(self):
+        backend = Path(__file__).resolve().parents[1]
+        sprite = (backend / "static" / "vendor" / "tabler-icons" / "sprite.svg").read_text(encoding="utf-8")
+        header = (backend / "templates" / "partials" / "dms_navbar.html").read_text(encoding="utf-8")
+        self.assertIn("with name='bell'", header)
+        self.assertIn('id="bell"', sprite)
+
     def test_classification_badge_uses_existing_display_value_and_distinct_styles(self):
         backend = Path(__file__).resolve().parents[1]
         template = (backend / "templates" / "components" / "document_classification.html").read_text(encoding="utf-8")
