@@ -327,6 +327,11 @@ class ManagementDirectiveForm(forms.Form):
 
             if is_executive_authority_user(issuer):
                 self.fields["assignee"].queryset = current_department_head_profiles()
+                issuer_profile = getattr(issuer, "employee_profile", None)
+                if issuer_profile:
+                    self.fields["assignee"].queryset = self.fields["assignee"].queryset.exclude(
+                        pk=issuer_profile.pk,
+                    )
             else:
                 self.fields["assignee"].queryset = current_direct_report_profiles(
                     issuer, include_viewers=False,

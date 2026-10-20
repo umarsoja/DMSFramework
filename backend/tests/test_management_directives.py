@@ -264,6 +264,16 @@ class ManagementDirectiveTests(TestCase):
         directive = self.issue(issuer=executive, assignee=hod)
         self.assertEqual(directive.workflow_task.assigned_to, hod)
 
+    def test_executive_directive_form_excludes_issuer_from_hod_choices(self):
+        from apps.documents.forms import ManagementDirectiveForm
+
+        executive = self.make_user("directive-executive-form", "DIRECTIVE-EXEC-FORM", "DMS Department Manager/HOD")
+        executive.groups.add(Group.objects.get(name="DMS Executive Authority"))
+        self.office.head = executive.employee_profile
+        self.office.save(update_fields=["head"])
+        form = ManagementDirectiveForm(can_assign=True, issuer=executive)
+        self.assertNotIn(executive.employee_profile, form.fields["assignee"].queryset)
+
     def test_dms_administrator_without_reporting_relationship_is_not_eligible(self):
         administrator = self.make_user(
             "directive-admin", "DIRECTIVE-ADMIN", "DMS Administrator",
