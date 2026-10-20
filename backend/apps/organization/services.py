@@ -23,13 +23,23 @@ USERNAME_COLLISION_RETRIES = 1000
 
 def _generated_username_base(first_name, last_name, *, max_length):
     parts = []
-    for value in (first_name, last_name):
+    # The onboarding form stores the complete official last-name field. Use
+    # its first name component for the concise login identifier while keeping
+    # the original field unchanged on the User record.
+    values = (first_name, (last_name or "").split()[0] if (last_name or "").split() else "")
+    for value in values:
         ascii_name = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode("ascii")
         normalized = re.sub(r"[^a-z0-9]+", ".", ascii_name.casefold()).strip(".")
         if normalized:
             parts.append(normalized)
     base = ".".join(parts) or "employee"
     return base[:max_length].rstrip(".") or "employee"[:max_length]
+
+
+def _normalize_username(value, *, max_length):
+    normalized = re.sub(r"[^a-z0-9._-]+", ".", (value or "").strip().casefold())
+    normalized = re.sub(r"[.]{2,}", ".", normalized).strip(".-_")
+    return normalized[:max_length].rstrip(".-_")
 
 
 def _create_employee_user(*, first_name, last_name, email):
@@ -251,9 +261,17 @@ def onboard_employee(*, actor, staff_id, employment_status, account_status, depa
         raise PermissionDenied("You are not authorized to assign DMS roles.")
     created_user = user is None
     if created_user:
-        # `username` remains accepted for older internal callers but is never
-        # trusted or used. Administrators cannot choose a new account username.
-        user = _create_employee_user(first_name=first_name, last_name=last_name, email=email)
+        username_field = User._meta.get_field("username")
+        max_length = max(1, username_field.max_length or 150)
+        requested = _normalize_username(username, max_length=max_length) if username else ""
+        if requested:
+            if User.objects.filter(username__iexact=requested).exists():
+                raise ValidationError({"username": "This username is already in use."})
+            user = User(username=requested, first_name=first_name, last_name=last_name, email=email, is_active=False)
+            user.set_unusable_password()
+            user.save(force_insert=True)
+        else:
+            user = _create_employee_user(first_name=first_name, last_name=last_name, email=email)
     else:
         if account_status == EmployeeProfile.AccountStatus.ACTIVE and not user.is_active:
             raise ValidationError({"account_status": "A disabled existing account cannot be enabled by linking it to an employee profile."})

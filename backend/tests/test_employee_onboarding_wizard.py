@@ -54,16 +54,18 @@ class EmployeeOnboardingWizardTests(TestCase):
         data.update(overrides)
         return data
 
-    def test_wizard_has_three_steps_and_does_not_accept_manual_username(self):
+    def test_wizard_has_three_steps_and_allows_editable_username(self):
         response = self.client.get(reverse("organization:employee-create"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Account identity")
         self.assertContains(response, "Organisation and access")
         self.assertContains(response, "Review and onboard")
-        self.assertContains(response, "Generated username preview")
-        self.assertContains(response, "Username is generated automatically")
-        self.assertNotContains(response, 'name="username"')
+        self.assertContains(response, "The username is filled from the employee name")
+        self.assertContains(response, 'name="username"')
+        self.assertContains(response, '@input="markUsernameEdited()"')
+        self.assertContains(response, '@input="syncSuggestedUsername($event)"')
+        self.assertContains(response, "Use suggested username")
 
     def test_rendered_wizard_uses_cache_busted_registered_alpine_component(self):
         response = self.client.get(reverse("organization:employee-create"))
@@ -110,9 +112,8 @@ class EmployeeOnboardingWizardTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         profile = EmployeeProfile.objects.get(staff_id="WIZ-001")
-        self.assertEqual(profile.user.username, "alkasim.mohammed")
+        self.assertEqual(profile.user.username, "admin-choice")
         self.assertEqual(profile.user.email, "alkasim@example.test")
-        self.assertNotEqual(profile.user.username, "admin-choice")
         self.assertFalse(profile.user.has_usable_password())
         self.assertEqual(profile.current_assignment.department, self.department)
         self.assertIn(self.standard_group, profile.user.groups.all())
@@ -122,6 +123,19 @@ class EmployeeOnboardingWizardTests(TestCase):
         self.assertEqual(EmailOutbox.objects.get(recipient=profile.user).status, EmailOutbox.Status.SENT)
         self.assertEqual(len(mail.outbox), 1)
         self.assertNotContains(response, response.context["profile"]._activation_token)
+
+    def test_manual_username_survives_wizard_review_and_persistence(self):
+        data = self.payload(first_name="Abubakar", last_name="Alhaji Mohammed", username="abubakar.alhaji")
+        response = self.client.get(reverse("organization:employee-create"))
+        self.assertContains(response, 'x-text="formValues.username"')
+        self.assertContains(response, 'x-model="formValues.username"')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("organization:employee-create"), data)
+        profile = EmployeeProfile.objects.get(staff_id="WIZ-001")
+        self.assertEqual(profile.user.username, "abubakar.alhaji")
+        self.assertEqual(profile.user.get_full_name(), "Abubakar Alhaji Mohammed")
+        self.assertIn("abubakar.alhaji", mail.outbox[-1].body)
+        self.assertNotIn("abubakar.alhaji.mohammed", mail.outbox[-1].body)
 
     def test_invalid_position_returns_to_organisation_step_and_retains_email(self):
         data = self.payload(position="")
@@ -155,6 +169,17 @@ class EmployeeOnboardingWizardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         profile = EmployeeProfile.objects.get(staff_id="WIZ-001")
         self.assertEqual(profile.user.username, "alkasim.mohammed2")
+
+    def test_generated_username_excludes_middle_names(self):
+        profile = onboard_employee(
+            actor=self.admin, username=None, first_name="Ibrahim", last_name="Abdullahi",
+            email="ibrahim@example.test", staff_id="WIZ-MIDDLE",
+            employment_status=EmployeeProfile.EmploymentStatus.EMPLOYED,
+            account_status=EmployeeProfile.AccountStatus.INACTIVE,
+            department=self.department, position=self.position, roles=[self.standard_group],
+            start_date=timezone.localdate(),
+        )
+        self.assertEqual(profile.user.username, "ibrahim.abdullahi")
 
     def test_linked_account_keeps_username_password_and_email(self):
         User = get_user_model()

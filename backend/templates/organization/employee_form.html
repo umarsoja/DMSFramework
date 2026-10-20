@@ -83,12 +83,12 @@
               {% for error in form.last_name.errors %}<div id="onboarding-error-last_name" class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
             <div class="col-12">
-              <div class="employee-username-preview" aria-live="polite">
-                <span class="form-label mb-1">Generated username preview</span>
-                <code x-text="usernamePreview()">employee</code>
-                <small>Preview only; the server assigns the final unique username when saving.</small>
-              </div>
-              <p class="form-hint mb-0">Username is generated automatically. The employee will establish their password through a secure activation link.</p>
+              <label class="form-label" for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
+              {{ form.username }}
+              <p class="form-hint mb-0">The username is filled from the employee name and remains editable. It must be unique.
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="resetUsername()">Use suggested username</button>
+              </p>
+              {% for error in form.username.errors %}<div id="onboarding-error-username" class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
           </div>
 
@@ -139,7 +139,8 @@
               <dl>
                 <div><dt>Full name</dt><dd x-text="employeeName()"></dd></div>
                 <div><dt>Official email</dt><dd x-text="accountEmail()"></dd></div>
-                <div><dt>Username</dt><dd><code x-text="accountUsername()"></code></dd></div>
+                <div x-show="accountMode === 'create'"><dt>Username</dt><dd><code x-text="formValues.username"></code></dd></div>
+                <div x-show="accountMode === 'link'"><dt>Username</dt><dd><code x-text="linkedAccountPart(1, 'Existing username')"></code></dd></div>
                 <div><dt>Account mode</dt><dd x-text="accountModeLabel()"></dd></div>
               </dl>
               <button class="btn btn-sm btn-outline-primary" type="button" @click="$dispatch('wizard-step', 1)">Edit Identity</button>

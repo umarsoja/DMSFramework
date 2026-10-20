@@ -7,6 +7,7 @@
       currentStep: Number(options.initialStep || 1),
       accountMode: options.accountMode || 'create',
       formValues: {},
+      usernameEdited: false,
       steps: [
         { number: 1, title: 'Account Identity' },
         { number: 2, title: 'Organisation & Access' },
@@ -20,6 +21,8 @@
             ? [...field.selectedOptions].map((option) => option.value)
             : field.value;
         });
+        this.usernameEdited = Boolean(String(this.formValues.username || '').trim());
+        if (this.accountMode === 'create' && !this.usernameEdited) this.syncSuggestedUsername();
       },
 
       goTo(step) {
@@ -40,6 +43,24 @@
 
       back() {
         this.currentStep = Math.max(1, this.currentStep - 1);
+      },
+
+      syncSuggestedUsername(event = null) {
+        if (this.accountMode !== 'create' || this.usernameEdited) return;
+        const firstNameField = document.querySelector('#employee-onboarding-form [name="first_name"]');
+        const lastNameField = document.querySelector('#employee-onboarding-form [name="last_name"]');
+        const firstName = event?.target?.name === 'first_name' ? event.target.value : (firstNameField?.value || this.formValues.first_name || '');
+        const lastName = event?.target?.name === 'last_name' ? event.target.value : (lastNameField?.value || this.formValues.last_name || '');
+        this.formValues.username = this.usernamePreview(firstName, lastName);
+      },
+
+      markUsernameEdited() {
+        this.usernameEdited = true;
+      },
+
+      resetUsername() {
+        this.usernameEdited = false;
+        this.syncSuggestedUsername();
       },
 
       visibleField(name, panel) {
@@ -84,13 +105,13 @@
         field.focus();
       },
 
-      usernamePreview() {
+      usernamePreview(firstName = this.formValues.first_name || '', lastName = this.formValues.last_name || '') {
         const normalize = (value) => value.normalize('NFKD')
           .replace(/[\u0300-\u036f]/g, '')
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '.')
           .replace(/^\.+|\.+$/g, '');
-        const parts = [normalize(this.formValues.first_name || ''), normalize(this.formValues.last_name || '')].filter(Boolean);
+        const parts = [normalize(firstName), normalize(String(lastName).trim().split(/\s+/)[0] || '')].filter(Boolean);
         return parts.join('.') || 'employee';
       },
 
@@ -168,10 +189,6 @@
       linkedAccountPart(index, fallback) {
         const parts = this.selectedLabel('existing_user', '').split('·').map((part) => part.trim());
         return parts[index] || fallback;
-      },
-
-      accountUsername() {
-        return this.accountMode === 'link' ? this.linkedAccountPart(1, 'Existing username') : this.usernamePreview();
       },
 
       accountEmail() {

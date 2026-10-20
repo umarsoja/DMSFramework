@@ -50,12 +50,13 @@ class ActivationEmailDeliveryTests(TestCase):
         )
 
     def create_employee(self, username="mail-employee", *, email=None,
-                        account_status=EmployeeProfile.AccountStatus.INACTIVE):
+                        account_status=EmployeeProfile.AccountStatus.INACTIVE,
+                        first_name="Fahd", last_name="Employee"):
         return onboard_employee(
             actor=self.admin,
             username=username,
-            first_name="Fahd",
-            last_name="Employee",
+            first_name=first_name,
+            last_name=last_name,
             email=email or f"{username}@example.test",
             staff_id=f"STAFF-{username}",
             employment_status=EmployeeProfile.EmploymentStatus.EMPLOYED,
@@ -96,6 +97,19 @@ class ActivationEmailDeliveryTests(TestCase):
         self.assertFalse(hasattr(outbox, "body"))
         self.assertFalse(hasattr(outbox, "activation_url"))
 
+    def test_activation_email_keeps_full_official_name_separate_from_short_username(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            profile = self.create_employee(
+                username="abubakar.alhaji",
+                first_name="Abubakar Alhaji",
+                last_name="Mohammed",
+            )
+        message = mail.outbox[0]
+        self.assertIn("Hello Abubakar Alhaji Mohammed", message.body)
+        self.assertIn("Your login username is: abubakar.alhaji", message.body)
+        self.assertIn("Abubakar Alhaji Mohammed", message.alternatives[0][0])
+        self.assertNotIn("Abubakar Alhaji Mohammed".replace(" ", ".").lower(), message.body.lower())
+        self.assertEqual(profile.user.get_full_name(), "Abubakar Alhaji Mohammed")
     def test_linked_account_uses_its_authoritative_user_email(self):
         linked = get_user_model().objects.create_user(
             username="linked-account", email="authoritative@example.test",

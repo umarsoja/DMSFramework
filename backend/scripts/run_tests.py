@@ -4,9 +4,11 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 
 settings = os.environ.get("APGC_TEST_SETTINGS", "config.settings.testing")
+backend_dir = Path(__file__).resolve().parents[1]
 command = [
     sys.executable,
     "manage.py",
@@ -15,7 +17,13 @@ command = [
     f"--settings={settings}",
     *sys.argv[1:],
 ]
-result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+result = subprocess.run(
+    command,
+    cwd=backend_dir,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+)
 sys.stdout.write(result.stdout)
 if result.returncode:
     raise SystemExit(result.returncode)

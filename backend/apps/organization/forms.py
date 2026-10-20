@@ -24,6 +24,7 @@ class EmployeeOnboardingForm(forms.Form):
     first_name = forms.CharField(max_length=150, required=False, label="First name", widget=forms.TextInput(attrs={"class": "form-control"}))
     last_name = forms.CharField(max_length=150, required=False, label="Last name", widget=forms.TextInput(attrs={"class": "form-control"}))
     email = forms.EmailField(required=False, label="Official email", widget=forms.EmailInput(attrs={"class": "form-control", "autocomplete": "off"}))
+    username = forms.CharField(max_length=150, required=False, label="Username", widget=forms.TextInput(attrs={"class": "form-control", "autocomplete": "username"}))
     staff_id = forms.CharField(max_length=64, label="Staff ID", widget=forms.TextInput(attrs={"class": "form-control"}))
     employment_status = forms.ChoiceField(choices=EmployeeProfile.EmploymentStatus.choices, widget=forms.Select(attrs={"class": "form-select"}))
     account_status = forms.ChoiceField(choices=EmployeeProfile.AccountStatus.choices, initial=EmployeeProfile.AccountStatus.INACTIVE, widget=forms.Select(attrs={"class": "form-select"}))
@@ -85,6 +86,15 @@ class EmployeeOnboardingForm(forms.Form):
                         self.add_error("email", "An account already uses this email. Choose Link an existing account to continue.")
                     else:
                         self.add_error("email", "This email matches existing account records and needs administrator review. No new account was created.")
+            username = (cleaned.get("username") or "").strip().casefold()
+            if username:
+                import re
+                if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", username):
+                    self.add_error("username", "Use lowercase letters, numbers, dots, hyphens or underscores.")
+                elif get_user_model().objects.filter(username__iexact=username).exists():
+                    self.add_error("username", "This username is already in use.")
+                else:
+                    cleaned["username"] = username
         if cleaned.get("position") and cleaned.get("department"):
             position = cleaned["position"]
             if position.department_id and position.department_id != cleaned["department"].pk:

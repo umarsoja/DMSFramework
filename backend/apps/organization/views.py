@@ -117,6 +117,9 @@ def employee_create(request):
     form.fields["existing_user"].widget.attrs["x-bind:disabled"] = "accountMode !== 'link'"
     for field_name in ("first_name", "last_name"):
         form.fields[field_name].widget.attrs["x-bind:disabled"] = "accountMode !== 'create'"
+        form.fields[field_name].widget.attrs["@input"] = "syncSuggestedUsername($event)"
+    form.fields["username"].widget.attrs["x-bind:disabled"] = "accountMode !== 'create'"
+    form.fields["username"].widget.attrs["@input"] = "markUsernameEdited()"
     if form.is_bound:
         for field_name, field in form.fields.items():
             if field_name in form.errors:
@@ -133,6 +136,7 @@ def employee_create(request):
                     user=data["existing_user"],
                     first_name=data["first_name"],
                     last_name=data["last_name"], email=data["email"],
+                    username=data.get("username"),
                     staff_id=data["staff_id"], employment_status=data["employment_status"],
                     account_status=data["account_status"], department=data["department"],
                     position=data["position"], supervisor=data["supervisor"],
