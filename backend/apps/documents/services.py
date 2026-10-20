@@ -348,6 +348,8 @@ def issue_management_directive(*, target_document, issuer, action_type, instruct
 
     if not issuer.has_perm("documents.issue_management_directives"):
         raise PermissionDenied("You are not authorized to issue management directives.")
+    if not is_workflow_actor_eligible(getattr(issuer, "employee_profile", None)):
+        raise PermissionDenied("An active, eligible DMS employee is required to issue management directives.")
     document = Document.objects.select_for_update().select_related("document_type").get(pk=target_document.pk)
     if not can_view_document(issuer, document):
         raise PermissionDenied("You are not authorized to access the target document.")
@@ -374,9 +376,20 @@ def issue_management_directive(*, target_document, issuer, action_type, instruct
             raise ValidationError({"assignee": "Choose an active DMS employee with a current assignment."})
         issuer_profile = getattr(issuer, "employee_profile", None)
         assignee_assignment = profile.current_assignment
-        if (
-            profile.pk == getattr(issuer_profile, "pk", None)
-            or not issuer_profile
+        from apps.organization.directory import is_executive_authority_user
+        is_executive = is_executive_authority_user(issuer)
+        is_department_head = bool(
+            assignee_assignment
+            and assignee_assignment.department.head_id == profile.pk
+            and assignee_assignment.department.is_active
+        )
+        if profile.pk == getattr(issuer_profile, "pk", None):
+            raise ValidationError({"assignee": "You cannot assign a directive to yourself."})
+        if is_executive:
+            if not is_department_head:
+                raise ValidationError({"assignee": "Choose the active head of an active department."})
+        elif (
+            not issuer_profile
             or not assignee_assignment
             or assignee_assignment.supervisor_id != issuer_profile.pk
         ):

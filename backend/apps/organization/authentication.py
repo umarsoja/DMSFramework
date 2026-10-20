@@ -18,6 +18,7 @@ DMS_ROLE_GROUPS = (
     "DMS Workflow Administrator",
 )
 DMS_VIEWER_GROUP = "DMS Viewer"
+DMS_EXECUTIVE_AUTHORITY_GROUP = "DMS Executive Authority"
 DMS_ADMIN_GROUP = "DMS Administrator"
 
 

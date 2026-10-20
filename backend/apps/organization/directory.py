@@ -1,10 +1,10 @@
 """Shared queries and labels for current DMS employee directory entries."""
 
 from django.utils import timezone
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch
 
-from .authentication import DMS_ROLE_GROUPS, DMS_VIEWER_GROUP
-from .models import EmployeeAssignment, EmployeeProfile
+from .authentication import DMS_EXECUTIVE_AUTHORITY_GROUP, DMS_ROLE_GROUPS, DMS_VIEWER_GROUP
+from .models import Department, EmployeeAssignment, EmployeeProfile
 
 
 def current_directory_profiles(*, include_viewers=True):
@@ -40,6 +40,33 @@ def current_direct_report_profiles(supervisor, *, include_viewers=False):
         assignments__supervisor=supervisor_profile,
         assignments__end_date__isnull=True,
         assignments__start_date__lte=timezone.localdate(),
+    ).distinct()
+
+
+def is_executive_authority_user(user):
+    """Return whether an active, eligible user has the explicit executive group."""
+    return bool(
+        user
+        and user.is_authenticated
+        and user.groups.filter(name=DMS_EXECUTIVE_AUTHORITY_GROUP).exists()
+        and current_directory_profiles(include_viewers=False).filter(user=user).exists()
+    )
+
+
+def current_department_head_profiles():
+    """Return eligible configured heads of active departments.
+
+    A profile may head more than one department.  Eligibility is evaluated per
+    configured department by requiring the profile's current assignment to
+    match the department whose ``head`` points at it.
+    """
+    return current_directory_profiles(include_viewers=False).filter(
+        headed_departments__is_active=True,
+        assignments__end_date__isnull=True,
+        assignments__start_date__lte=timezone.localdate(),
+        assignments__department_id=F("headed_departments__pk"),
+        assignments__department__is_active=True,
+        assignments__position__is_active=True,
     ).distinct()
 
 

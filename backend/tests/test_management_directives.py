@@ -184,6 +184,86 @@ class ManagementDirectiveTests(TestCase):
         directive = self.issue(assignee=cross_department_report)
         self.assertEqual(directive.workflow_task.assigned_to, cross_department_report)
 
+    def test_explicit_executive_authority_can_assign_active_department_head(self):
+        executive = self.make_user("directive-executive", "DIRECTIVE-EXEC", "DMS Standard User")
+        executive.groups.add(Group.objects.get(name="DMS Executive Authority"))
+        DocumentAccess.objects.create(document=self.document, user=executive, can_view=True, can_download=False, granted_by=self.registrar)
+        department = Department.objects.create(code="DIRECTIVE-EXEC-UNIT", name="Executive Unit")
+        hod = self.make_user("directive-hod", "DIRECTIVE-HOD", "DMS Department Manager/HOD", department=department)
+        department.head = hod.employee_profile
+        department.full_clean()
+        department.save(update_fields=["head"])
+        directive = self.issue(issuer=executive, assignee=hod)
+        self.assertEqual(directive.workflow_task.assigned_to, hod)
+
+    def test_executive_authority_cannot_assign_non_head(self):
+        executive = self.make_user("directive-executive-2", "DIRECTIVE-EXEC-2", "DMS Standard User")
+        executive.groups.add(Group.objects.get(name="DMS Executive Authority"))
+        DocumentAccess.objects.create(document=self.document, user=executive, can_view=True, can_download=False, granted_by=self.registrar)
+        department = Department.objects.create(code="DIRECTIVE-EXEC-UNIT-2", name="Executive Unit 2")
+        hod = self.make_user("directive-hod-2", "DIRECTIVE-HOD-2", "DMS Department Manager/HOD", department=department)
+        department.head = hod.employee_profile
+        department.full_clean()
+        department.save(update_fields=["head"])
+        officer = self.make_user("directive-officer-2", "DIRECTIVE-OFFICER-2", "DMS Standard User", department=department, supervisor=hod.employee_profile)
+        with self.assertRaises(ValidationError):
+            self.issue(issuer=executive, assignee=officer)
+
+    def test_executive_rejects_inactive_hod(self):
+        executive = self.make_user("directive-executive-inactive", "DIRECTIVE-EXEC-INACTIVE", "DMS Standard User")
+        executive.groups.add(Group.objects.get(name="DMS Executive Authority"))
+        DocumentAccess.objects.create(document=self.document, user=executive, can_view=True, granted_by=self.registrar)
+        department = Department.objects.create(code="DIRECTIVE-INACTIVE-HOD", name="Inactive HOD Unit")
+        hod = self.make_user("directive-inactive-hod", "DIRECTIVE-INACTIVE-HOD", "DMS Department Manager/HOD", department=department)
+        department.head = hod.employee_profile
+        department.save(update_fields=["head"])
+        hod.employee_profile.account_status = EmployeeProfile.AccountStatus.INACTIVE
+        hod.employee_profile.save(update_fields=["account_status"])
+        with self.assertRaises(ValidationError):
+            self.issue(issuer=executive, assignee=hod)
+
+    def test_executive_rejects_hod_with_mismatched_current_assignment(self):
+        executive = self.make_user("directive-executive-mismatch", "DIRECTIVE-EXEC-MISMATCH", "DMS Standard User")
+        executive.groups.add(Group.objects.get(name="DMS Executive Authority"))
+        DocumentAccess.objects.create(document=self.document, user=executive, can_view=True, granted_by=self.registrar)
+        headed_department = Department.objects.create(code="DIRECTIVE-HEADED", name="Configured Head Unit")
+        other_department = Department.objects.create(code="DIRECTIVE-MISMATCH", name="Mismatch Unit")
+        hod = self.make_user("directive-mismatch-hod", "DIRECTIVE-MISMATCH-HOD", "DMS Department Manager/HOD", department=other_department)
+        headed_department.head = hod.employee_profile
+        headed_department.save(update_fields=["head"])
+        with self.assertRaises(ValidationError):
+            self.issue(issuer=executive, assignee=hod)
+
+    def test_executive_group_without_operational_role_is_ineligible(self):
+        executive = self.make_user("directive-executive-no-role", "DIRECTIVE-EXEC-NOROLE", "DMS Standard User")
+        executive.groups.remove(Group.objects.get(name="DMS Standard User"))
+        executive.groups.add(Group.objects.get(name="DMS Executive Authority"))
+        DocumentAccess.objects.create(document=self.document, user=executive, can_view=True, granted_by=self.registrar)
+        with self.assertRaises(PermissionDenied):
+            self.issue(issuer=executive)
+
+    def test_revoked_executive_authority_is_rejected(self):
+        executive = self.make_user("directive-executive-revoked", "DIRECTIVE-EXEC-REVOKED", "DMS Standard User")
+        executive.groups.add(Group.objects.get(name="DMS Executive Authority"))
+        DocumentAccess.objects.create(document=self.document, user=executive, can_view=True, granted_by=self.registrar)
+        executive.groups.remove(Group.objects.get(name="DMS Executive Authority"))
+        with self.assertRaises(PermissionDenied):
+            self.issue(issuer=executive)
+
+    def test_executive_can_assign_to_hod_who_heads_multiple_departments(self):
+        executive = self.make_user("directive-executive-multi", "DIRECTIVE-EXEC-MULTI", "DMS Standard User")
+        executive.groups.add(Group.objects.get(name="DMS Executive Authority"))
+        DocumentAccess.objects.create(document=self.document, user=executive, can_view=True, granted_by=self.registrar)
+        first = Department.objects.create(code="DIRECTIVE-MULTI-1", name="Multi Unit One")
+        second = Department.objects.create(code="DIRECTIVE-MULTI-2", name="Multi Unit Two")
+        hod = self.make_user("directive-multi-hod", "DIRECTIVE-MULTI-HOD", "DMS Department Manager/HOD", department=first)
+        first.head = hod.employee_profile
+        second.head = hod.employee_profile
+        first.save(update_fields=["head"])
+        second.save(update_fields=["head"])
+        directive = self.issue(issuer=executive, assignee=hod)
+        self.assertEqual(directive.workflow_task.assigned_to, hod)
+
     def test_dms_administrator_without_reporting_relationship_is_not_eligible(self):
         administrator = self.make_user(
             "directive-admin", "DIRECTIVE-ADMIN", "DMS Administrator",

@@ -323,11 +323,14 @@ class ManagementDirectiveForm(forms.Form):
             is_active=True,
         ).exclude(code__in=("review", "approve")).order_by("label")
         if can_assign:
-            from apps.organization.directory import current_direct_report_profiles
+            from apps.organization.directory import current_department_head_profiles, current_direct_report_profiles, is_executive_authority_user
 
-            self.fields["assignee"].queryset = current_direct_report_profiles(
-                issuer, include_viewers=False,
-            )
+            if is_executive_authority_user(issuer):
+                self.fields["assignee"].queryset = current_department_head_profiles()
+            else:
+                self.fields["assignee"].queryset = current_direct_report_profiles(
+                    issuer, include_viewers=False,
+                )
         else:
             self.fields.pop("assignee")
             self.fields.pop("due_date")
