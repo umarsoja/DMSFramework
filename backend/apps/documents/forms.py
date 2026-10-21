@@ -7,7 +7,7 @@ from django.db.models import Case, IntegerField, Prefetch, Value, When
 from django.forms.widgets import ClearableFileInput
 from django.utils import timezone
 
-from .models import Attachment, Document, WorkflowActionType, WorkflowDefinition
+from .models import Attachment, Document, WorkflowActionType, WorkflowDefinition, WorkflowInstance, WorkflowTask
 from .handlers import CORRESPONDENCE_TYPE_CHOICES, PRIORITY_CHOICES
 from apps.organization.directory import (
     current_directory_profiles,
@@ -148,16 +148,50 @@ class MemoForm(forms.Form):
         active_workflow = WorkflowDefinition.objects.filter(
             document_type__code="IM", document_type__is_active=True, is_active=True
         ).order_by("version").first()
+        if document:
+            document_workflow = WorkflowInstance.objects.filter(document=document).select_related("definition").first()
+            if document_workflow:
+                active_workflow = document_workflow.definition
         review_step = active_workflow.steps.filter(is_review=True).order_by("sequence").first() if active_workflow else None
+        if document and document.status == Document.Status.RETURNED:
+            historical_review_task = WorkflowTask.objects.filter(
+                instance__document=document, step__is_review=True,
+            ).select_related("step").order_by("-cycle").first()
+            if historical_review_task:
+                review_step = historical_review_task.step
         self.show_reviewer_selector = bool(review_step and review_step.actor_type == review_step.ActorType.SELECTED_USER)
         self.fields["reviewer"].queryset = reviewers if self.show_reviewer_selector else User.objects.none()
+        continuity_locked = False
+        if document and document.status == Document.Status.RETURNED and self.show_reviewer_selector:
+            previous_task = WorkflowTask.objects.filter(
+                instance__document=document, step=review_step,
+            ).order_by("-cycle").first()
+            if previous_task:
+                continuity_locked = True
+                eligible_original = self.fields["reviewer"].queryset.filter(
+                    pk=previous_task.assigned_to_id,
+                )
+                # Keep the original identity visible even if it is no longer
+                # eligible; the service will fail closed with a validation error.
+                self.fields["reviewer"].queryset = (
+                    eligible_original if eligible_original.exists()
+                    else User.objects.filter(pk=previous_task.assigned_to_id)
+                )
+                self.fields["reviewer"].initial = previous_task.assigned_to_id
+                self.fields["reviewer"].disabled = True
+                self.fields["reviewer"].help_text = (
+                    "Original reviewer (locked for resubmission)."
+                    if eligible_original.exists() else
+                    "The original reviewer is no longer eligible; resubmission cannot proceed."
+                )
         self.fields["reviewer"].required = action == "submit" and self.show_reviewer_selector
-        self.fields["reviewer"].help_text = (
+        if not continuity_locked:
+            self.fields["reviewer"].help_text = (
             "Recommended from your current assignment: " + "; ".join(recommendation_labels)
             + ". Candidates must be active employees with a current assignment and a non-viewer DMS role; you and your direct reports are excluded."
             if recommendation_labels else
             "Choose an eligible reviewer. Candidates must be active employees with a current assignment and a non-viewer DMS role; you and your direct reports are excluded."
-        )
+            )
         if not self.show_reviewer_selector:
             self.fields["reviewer"].help_text = "The active workflow resolves its reviewer from the configured actor rule."
         if document:

@@ -679,6 +679,34 @@ class InternalMemoLifecycleTests(TestCase):
         self.assertEqual(resubmitted_event.version, second_task.submitted_version)
         self.assertTrue(document.audit_events.filter(action=AuditEvent.Action.RESUBMITTED).exists())
 
+    def test_returned_selected_reviewer_is_locked_in_form(self):
+        document = self.submit(self.make_draft())
+        task = WorkflowTask.objects.get(instance__document=document)
+        decide_review(task_id=task.pk, actor=self.reviewer, outcome=WorkflowDecision.Outcome.RETURN,
+                      comment="Please revise.")
+        document.refresh_from_db()
+
+        form = MemoForm(user=self.owner, document=document, action="submit")
+
+        self.assertTrue(form.fields["reviewer"].disabled)
+        self.assertEqual(form.fields["reviewer"].initial, self.reviewer.pk)
+        self.assertIn("locked", form.fields["reviewer"].help_text.lower())
+        self.assertIn('disabled', str(form["reviewer"]))
+
+    def test_returned_memo_rejects_forged_reviewer_substitution(self):
+        document = self.submit(self.make_draft())
+        task = WorkflowTask.objects.get(instance__document=document)
+        decide_review(task_id=task.pk, actor=self.reviewer, outcome=WorkflowDecision.Outcome.RETURN,
+                      comment="Please revise.")
+
+        with self.assertRaises(ValidationError):
+            save_memo(document=document, actor=self.owner, values=self.values("Updated plan"),
+                      revision_note="Addressed the review comments.", reviewer=self.department_head)
+
+        document.refresh_from_db()
+        self.assertEqual(document.status, Document.Status.RETURNED)
+        self.assertEqual(document.workflow.tasks.count(), 1)
+
     def test_bound_workflow_task_can_be_approved_with_task_only_row_lock(self):
         document = self.submit(self.make_draft())
         task = WorkflowTask.objects.get(instance__document=document)
@@ -1125,7 +1153,11 @@ class InternalMemoLifecycleTests(TestCase):
         attachment = Attachment.objects.get(version=document.current_version)
         self.assertTrue(attachment.file.name.startswith("private_documents/"))
         self.client.force_login(self.owner)
-        response = self.client.get(reverse("documents:attachment-download", args=[document.pk, attachment.pk]))
+        download_url = reverse("documents:attachment-download", args=[document.pk, attachment.pk])
+        confirmation = self.client.get(download_url)
+        self.assertEqual(confirmation.status_code, 200)
+        self.assertContains(confirmation, "authorized APGC personnel")
+        response = self.client.post(download_url, {"acknowledged": "1"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("attachment", response["Content-Disposition"])
         self.assertTrue(document.audit_events.filter(action=AuditEvent.Action.DOWNLOADED).exists())

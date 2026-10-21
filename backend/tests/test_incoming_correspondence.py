@@ -511,6 +511,8 @@ class IncomingCorrespondenceTests(TestCase):
             response,
             f'href="{view_url}" target="_blank" rel="noopener noreferrer">View</a>',
         )
+        download_url = reverse("documents:incoming-attachment-download", args=[document.pk, original.pk])
+        self.assertContains(response, f'href="{download_url}">Download</a>')
         self.assertContains(response, "Related memo")
         self.assertEqual(relationship.target_document_id, memo.pk)
         self.assertFalse(can_view_document(self.outsider, memo))

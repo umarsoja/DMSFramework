@@ -119,7 +119,21 @@ def _submit_locked(document, actor, reviewer, *, submitted_version, resubmitted=
     step = definition.steps.filter(is_review=True).order_by("sequence").first()
     from apps.organization.actors import resolve_workflow_actor
 
+    previous_task = None
+    if resubmitted and step.actor_type == step.ActorType.SELECTED_USER:
+        previous_task = workflow.tasks.filter(step=step).order_by("-cycle").first()
+        if not previous_task:
+            raise ValidationError("The original review assignment could not be established.")
+        if reviewer is not None and reviewer.pk != previous_task.assigned_to_id:
+            raise ValidationError("A returned memo must be resubmitted to its original reviewer.")
+        # Resolve the reviewer from workflow history, never from a mutable form value.
+        reviewer = previous_task.assigned_to
     reviewer, reviewer_assignment = resolve_workflow_actor(step=step, document=document, selected_user=reviewer)
+    if resubmitted and step.actor_type == step.ActorType.SELECTED_USER:
+        if not previous_task:
+            raise ValidationError("The original review assignment could not be established.")
+        if previous_task.assigned_to_id != reviewer.pk:
+            raise ValidationError("A returned memo must be resubmitted to its original reviewer.")
     if reviewer.pk == actor.pk:
         raise ValidationError("A document creator cannot review their own memo.")
     cycle = workflow.tasks.aggregate(models_max=Max("cycle"))["models_max"] or 0

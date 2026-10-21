@@ -24,7 +24,7 @@
     <div class="memo-detail-main">
       <section class="card detail-section" aria-labelledby="info-title"><div class="card-header"><h2 id="info-title" class="card-title">Document information</h2></div><div class="card-body">{% include 'components/document_metadata.html' with document=document version=version only %}</div></section>
       <section class="card detail-section" aria-labelledby="content-title"><div class="card-header"><h2 id="content-title" class="card-title">Content</h2></div><div class="card-body"><div class="memo-body">{{ version.content.body|linebreaksbr }}</div></div></section>
-      <section class="card detail-section" aria-labelledby="attachments-title"><div class="card-header"><h2 id="attachments-title" class="card-title">Attachments</h2></div><div class="card-body">{% include 'components/attachment_list.html' with document=document version=version can_download=can_download only %}</div></section>
+      <section class="card detail-section" aria-labelledby="attachments-title"><div class="card-header"><h2 id="attachments-title" class="card-title">Attachments</h2></div><div class="card-body">{% include 'components/attachment_list.html' with document=document version=version can_download=can_download downloadable_attachment_ids=downloadable_attachment_ids only %}</div></section>
       <div hx-get="{% url 'documents:related-documents-panel' document.pk %}" hx-trigger="load" hx-swap="innerHTML"><p class="text-secondary">Loading related documents…</p></div>
     </div>
     <aside class="memo-detail-side">

@@ -1,0 +1,20 @@
+{% extends 'layouts/dms_authenticated.html' %}
+{% block title %}Confirm attachment download | APGC DMS{% endblock %}
+{% block content %}
+<section class="container-xl dms-page" aria-labelledby="download-title">
+  <div class="card detail-section mx-auto" style="max-width: 48rem">
+    <div class="card-header"><h1 id="download-title" class="card-title">Confirm attachment download</h1></div>
+    <div class="card-body">
+      {% if download_error %}<div class="alert alert-danger" role="alert">{{ download_error }}</div>{% endif %}
+      <p>This document is intended for authorized APGC personnel only. It may contain confidential or sensitive information. By downloading this document, you acknowledge your responsibility to protect its contents, prevent unauthorized disclosure, and comply with APGC information security policies. Your download activity will be recorded in the DMS audit history.</p>
+      <p><strong>{{ attachment.original_filename }}</strong> - Version {{ attachment.version.number }}</p>
+      <form method="post">
+        {% csrf_token %}
+        <label class="form-check mb-3"><input class="form-check-input" type="checkbox" name="acknowledged" value="1" required> <span class="form-check-label">I acknowledge this responsibility and want to download the file.</span></label>
+        <button class="btn btn-primary" type="submit">Download attachment</button>
+        <a class="btn btn-outline-secondary" href="{% if document.document_type.code == 'IM' %}{% url 'documents:memo-detail' document.pk %}{% else %}{% url 'documents:incoming-detail' document.pk %}{% endif %}">Cancel</a>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

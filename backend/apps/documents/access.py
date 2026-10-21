@@ -110,6 +110,22 @@ def can_download_document(user, document):
     ).exists()
 
 
+def can_download_attachment(user, attachment):
+    """Allow normal download grants plus the exact version under active review."""
+    if not user.is_authenticated or not user.is_active:
+        return False
+    document = attachment.version.document
+    if can_download_document(user, document):
+        return True
+    return WorkflowTask.objects.filter(
+        instance__document=document,
+        assigned_to=user,
+        status=WorkflowTask.Status.PENDING,
+        step__is_review=True,
+        submitted_version_id=attachment.version_id,
+    ).exists()
+
+
 def can_edit_document(user, document):
     return bool(
         user.is_authenticated

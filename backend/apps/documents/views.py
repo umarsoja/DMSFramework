@@ -5,14 +5,14 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import F, Q
-from django.http import FileResponse, HttpResponse, HttpResponseBadRequest
+from django.http import FileResponse, HttpResponse, HttpResponseBadRequest, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.organization.authentication import dms_access_required, dms_write_required
 from apps.organization.authentication import is_dms_viewer
-from .access import can_download_document, can_edit_document, pending_review_task, visible_documents
+from .access import can_download_attachment, can_download_document, can_edit_document, pending_review_task, visible_documents
 from .forms import (
     IncomingCorrespondenceForm,
     IncomingCorrespondenceRevisionForm,
@@ -244,6 +244,7 @@ def incoming_detail(request, pk):
         "metadata_display": metadata_display,
         "versions": document.versions.all(),
         "attachments": version.attachments.all(),
+        "downloadable_attachment_ids": [a.pk for a in version.attachments.all() if can_download_attachment(request.user, a)],
         "audit_events": document.audit_events.select_related("actor", "version"),
         "related_documents": related_documents(document=document, user=request.user),
         "can_download": can_download_document(request.user, document),
@@ -401,10 +402,21 @@ def incoming_attachment_view(request, pk, attachment_id):
 
 @dms_access_required
 def incoming_attachment_download(request, pk, attachment_id):
+    if request.method not in ("GET", "POST"):
+        return HttpResponseNotAllowed(["GET", "POST"])
     document = _accessible_incoming(request, pk)
-    if not can_download_document(request.user, document):
-        raise PermissionDenied("You have view access but not download access.")
     attachment = get_object_or_404(Attachment, pk=attachment_id, version__document=document)
+    if not can_download_attachment(request.user, attachment):
+        raise PermissionDenied("You have view access but not download access.")
+    if request.method == "GET":
+        return render(request, "documents/attachment_download_confirm.html", {
+            "document": document, "attachment": attachment,
+        })
+    if request.POST.get("acknowledged") != "1":
+        return render(request, "documents/attachment_download_confirm.html", {
+            "document": document, "attachment": attachment,
+            "download_error": "Please acknowledge the security notice before downloading.",
+        }, status=400)
     response = FileResponse(
         attachment.file.open("rb"), as_attachment=True,
         filename=attachment.original_filename, content_type="application/octet-stream",
@@ -660,10 +672,21 @@ def attachment_view(request, pk, attachment_id):
 
 @dms_access_required
 def attachment_download(request, pk, attachment_id):
+    if request.method not in ("GET", "POST"):
+        return HttpResponseNotAllowed(["GET", "POST"])
     document = _accessible_memo(request, pk)
-    if not can_download_document(request.user, document):
-        raise PermissionDenied("You have view access but not download access.")
     attachment = get_object_or_404(Attachment, pk=attachment_id, version__document=document)
+    if not can_download_attachment(request.user, attachment):
+        raise PermissionDenied("You have view access but not download access.")
+    if request.method == "GET":
+        return render(request, "documents/attachment_download_confirm.html", {
+            "document": document, "attachment": attachment,
+        })
+    if request.POST.get("acknowledged") != "1":
+        return render(request, "documents/attachment_download_confirm.html", {
+            "document": document, "attachment": attachment,
+            "download_error": "Please acknowledge the security notice before downloading.",
+        }, status=400)
     response = FileResponse(attachment.file.open("rb"), as_attachment=True, filename=attachment.original_filename,
                             content_type="application/octet-stream")
     response["X-Content-Type-Options"] = "nosniff"
